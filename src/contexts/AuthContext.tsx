@@ -5,73 +5,87 @@ import { User, Session } from "@supabase/supabase-js";
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, name: string) => Promise<void>;
-  logout: () => void;
-  isLoading: boolean;
+  // isAuthenticated: boolean; // Removed as per the provider value change
+  login: (email: string) => Promise<{ error: any }>;
+  signUp: (email: string, name: string) => Promise<{ error: any }>;
+  logout: () => Promise<void>;
+  updateProfile: (data: { name?: string; avatar_url?: string }) => Promise<{ error: any }>;
+  loading: boolean; // Renamed from isLoading
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Renamed from isLoading
 
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      setIsLoading(false);
+      setLoading(false); // Renamed from setIsLoading
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
-      setIsLoading(false);
+      setLoading(false); // Renamed from setIsLoading
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+  const login = async (email: string) => {
+    return await supabase.auth.signInWithOtp({
       email,
-      password,
+      options: {
+        emailRedirectTo: window.location.origin,
+      },
     });
-    if (error) throw error;
   };
 
-  const signUp = async (email: string, password: string, name: string) => {
-    const { error } = await supabase.auth.signUp({
+  const signUp = async (email: string, name: string) => {
+    return await supabase.auth.signInWithOtp({
       email,
-      password,
       options: {
-        data: {
-          name: name,
-        }
-      }
+        data: { name },
+        emailRedirectTo: window.location.origin,
+      },
     });
-    if (error) throw error;
   };
 
   const logout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    await supabase.auth.signOut();
+  };
+
+  const updateProfile = async (data: { name?: string; avatar_url?: string }) => {
+    const { data: updatedUser, error } = await supabase.auth.updateUser({
+      data: {
+        name: data.name,
+        avatar_url: data.avatar_url,
+      },
+    });
+
+    if (!error && updatedUser) {
+      setUser(updatedUser.user);
+    }
+
+    return { error };
   };
 
   return (
     <AuthContext.Provider value={{
       user,
       session,
-      isAuthenticated: !!user,
+      // isAuthenticated: !!user, // Removed as per the provider value change
       login,
       signUp,
       logout,
-      isLoading
+      loading, // Renamed from isLoading
+      updateProfile
     }}>
       {children}
     </AuthContext.Provider>

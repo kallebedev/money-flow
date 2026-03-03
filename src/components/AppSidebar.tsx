@@ -1,4 +1,4 @@
-import { LayoutDashboard, ArrowLeftRight, Tag, Target, DollarSign, LogOut, User } from "lucide-react";
+import { LayoutDashboard, ArrowLeftRight, Tag, Target, DollarSign, LogOut, User, Settings } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -21,6 +21,7 @@ const items = [
   { title: "Transações", url: "/transactions", icon: ArrowLeftRight },
   { title: "Categorias", url: "/categories", icon: Tag },
   { title: "Metas", url: "/goals", icon: Target },
+  { title: "Perfil", url: "/profile", icon: Settings },
 ];
 
 export function AppSidebar() {
