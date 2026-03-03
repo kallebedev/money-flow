@@ -6,13 +6,15 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { LogIn, Wallet } from "lucide-react";
+import { LogIn, Wallet, UserPlus } from "lucide-react";
 
 const Login = () => {
+    const [isLogin, setIsLogin] = useState(true);
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [name, setName] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    const { login } = useAuth();
+    const { login, signUp } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -21,18 +23,25 @@ const Login = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!email || !password) {
+        if (!email || !password || (!isLogin && !name)) {
             toast.error("Por favor, preencha todos os campos");
             return;
         }
 
         setIsLoading(true);
         try {
-            await login(email, password);
-            toast.success("Login realizado com sucesso!");
+            if (isLogin) {
+                await login(email, password);
+                toast.success("Login realizado com sucesso!");
+            } else {
+                await signUp(email, password, name);
+                toast.success("Conta criada! Verifique seu e-mail para confirmar.");
+                setIsLogin(true);
+                return;
+            }
             navigate(from, { replace: true });
-        } catch (error) {
-            toast.error("Erro ao realizar login. Tente novamente.");
+        } catch (error: any) {
+            toast.error(error.message || "Erro ao realizar operação. Tente novamente.");
         } finally {
             setIsLoading(false);
         }
@@ -56,11 +65,25 @@ const Login = () => {
                         MoneyFlow
                     </CardTitle>
                     <CardDescription className="text-slate-500 dark:text-slate-400 text-lg">
-                        Sua jornada financeira começa aqui
+                        {isLogin ? "Sua jornada financeira começa aqui" : "Crie sua conta e comece a economizar"}
                     </CardDescription>
                 </CardHeader>
                 <form onSubmit={handleSubmit}>
                     <CardContent className="space-y-4 pt-4">
+                        {!isLogin && (
+                            <div className="space-y-2 group">
+                                <Label htmlFor="name" className="group-focus-within:text-primary transition-colors">Nome</Label>
+                                <Input
+                                    id="name"
+                                    type="text"
+                                    placeholder="Seu nome"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus-visible:ring-primary transition-all duration-300"
+                                    required
+                                />
+                            </div>
+                        )}
                         <div className="space-y-2 group">
                             <Label htmlFor="email" className="group-focus-within:text-primary transition-colors">E-mail</Label>
                             <Input
@@ -94,17 +117,24 @@ const Login = () => {
                             {isLoading ? (
                                 <div className="flex items-center gap-2">
                                     <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin"></div>
-                                    Entrando...
+                                    {isLogin ? "Acessando..." : "Criando..."}
                                 </div>
                             ) : (
                                 <div className="flex items-center gap-2">
-                                    <LogIn className="w-5 h-5" />
-                                    Acessar conta
+                                    {isLogin ? <LogIn className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
+                                    {isLogin ? "Acessar conta" : "Criar conta"}
                                 </div>
                             )}
                         </Button>
                         <div className="text-sm text-center text-slate-500 dark:text-slate-400">
-                            Não tem uma conta? <span className="text-primary hover:underline cursor-pointer font-medium">Cadastre-se</span>
+                            {isLogin ? "Não tem uma conta?" : "Já tem uma conta?"}{" "}
+                            <button
+                                type="button"
+                                onClick={() => setIsLogin(!isLogin)}
+                                className="text-primary hover:underline cursor-pointer font-medium bg-transparent border-none outline-none"
+                            >
+                                {isLogin ? "Cadastre-se" : "Faça login"}
+                            </button>
                         </div>
                     </CardFooter>
                 </form>

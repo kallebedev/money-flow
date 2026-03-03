@@ -66,14 +66,16 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <div className={`flex items-center gap-3 px-3 py-2 ${collapsed ? 'justify-center' : ''}`}>
               <Avatar className="h-8 w-8 border">
-                <AvatarImage src={user?.avatar} />
+                <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email}`} />
                 <AvatarFallback className="bg-primary/10 text-primary uppercase">
-                  {user?.name?.substring(0, 2)}
+                  {user?.user_metadata?.name?.substring(0, 2) || user?.email?.substring(0, 2)}
                 </AvatarFallback>
               </Avatar>
               {!collapsed && (
                 <div className="flex flex-col min-w-0">
-                  <span className="text-sm font-medium truncate leading-none mb-1">{user?.name}</span>
+                  <span className="text-sm font-medium truncate leading-none mb-1">
+                    {user?.user_metadata?.name || "Usuário"}
+                  </span>
                   <span className="text-xs text-muted-foreground truncate">{user?.email}</span>
                 </div>
               )}
