@@ -6,62 +6,119 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { User, Mail, Camera } from "lucide-react";
+import { User, Mail } from "lucide-react";
+import { ImageUpload } from "@/components/ImageUpload";
+import { supabase } from "@/lib/supabase";
+import confetti from "canvas-confetti";
 
 export default function Profile() {
     const { user, updateProfile } = useAuth();
     const [name, setName] = useState(user?.user_metadata?.name || "");
-    const [isLoading, setIsLoading] = useState(false);
+    const [isUpdatingName, setIsUpdatingName] = useState(false);
+    const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
 
-    const handleUpdate = async (e: React.FormEvent) => {
+    const handleUpdateName = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!name.trim()) {
             toast.error("O nome não pode estar vazio");
             return;
         }
 
-        setIsLoading(true);
+        setIsUpdatingName(true);
         const { error } = await updateProfile({ name });
-        setIsLoading(false);
+        setIsUpdatingName(false);
 
         if (error) {
-            toast.error("Erro ao atualizar perfil: " + error.message);
+            toast.error("Erro ao atualizar nome: " + error.message);
         } else {
-            toast.success("Perfil atualizado com sucesso!");
+            toast.success("Nome atualizado com sucesso!");
+            confetti({
+                particleCount: 100,
+                spread: 70,
+                origin: { y: 0.6 }
+            });
+        }
+    };
+
+    const handleAvatarUpload = async (blob: Blob) => {
+        if (!user) return;
+
+        setIsUpdatingAvatar(true);
+        try {
+            const fileExt = "jpg";
+            const fileName = `${user.id}-${Math.random()}.${fileExt}`;
+            const filePath = `${fileName}`;
+
+            // Upload to Supabase Storage
+            const { error: uploadError } = await supabase.storage
+                .from("avatars")
+                .upload(filePath, blob, {
+                    contentType: "image/jpeg",
+                    upsert: true
+                });
+
+            if (uploadError) throw uploadError;
+
+            // Get public URL
+            const { data: { publicUrl } } = supabase.storage
+                .from("avatars")
+                .getPublicUrl(filePath);
+
+            // Update auth metadata
+            const { error: updateError } = await updateProfile({ avatar_url: publicUrl });
+
+            if (updateError) throw updateError;
+
+            // Also update the profiles table if it exists
+            await supabase
+                .from("profiles")
+                .upsert({
+                    id: user.id,
+                    avatar_url: publicUrl,
+                    updated_at: new Date().toISOString()
+                });
+
+            toast.success("Foto de perfil atualizada!");
+            confetti({
+                particleCount: 150,
+                spread: 100,
+                origin: { y: 0.6 },
+                colors: ["#22c55e", "#10b981", "#3b82f6"]
+            });
+        } catch (error: any) {
+            toast.error("Erro ao enviar foto: " + error.message);
+        } finally {
+            setIsUpdatingAvatar(false);
         }
     };
 
     return (
-        <div className="max-w-2xl mx-auto space-y-8 animate-fade-in">
+        <div className="max-w-2xl mx-auto space-y-8 animate-fade-in px-4">
             <div>
                 <h1 className="text-3xl font-bold tracking-tight">Configurações de Perfil</h1>
                 <p className="text-muted-foreground">Gerencie suas informações pessoais e como elas aparecem no FinanPro.</p>
             </div>
 
             <div className="grid gap-8 md:grid-cols-[1fr_2fr]">
-                <Card className="finance-card flex flex-col items-center justify-center p-6 space-y-4 h-fit">
-                    <div className="relative group">
-                        <Avatar className="h-24 w-24 border-4 border-background shadow-xl">
-                            <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email}`} />
-                            <AvatarFallback className="text-2xl">{user?.email?.charAt(0).toUpperCase()}</AvatarFallback>
-                        </Avatar>
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-not-allowed">
-                            <Camera className="text-white h-6 w-6" />
-                        </div>
-                    </div>
+                <Card className="finance-card flex flex-col items-center justify-center p-6 space-y-4 h-fit border-primary/10">
+                    <ImageUpload
+                        onUpload={handleAvatarUpload}
+                        currentImageUrl={user?.user_metadata?.avatar_url}
+                        loading={isUpdatingAvatar}
+                    />
                     <div className="text-center">
                         <h3 className="font-bold text-lg">{user?.user_metadata?.name || "Usuário"}</h3>
                         <p className="text-sm text-muted-foreground">{user?.email}</p>
                     </div>
                 </Card>
 
-                <Card className="finance-card">
+                <Card className="finance-card border-primary/10">
                     <CardHeader>
                         <CardTitle>Informações Básicas</CardTitle>
                         <CardDescription>Atualize seu nome e outras informações da conta.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <form onSubmit={handleUpdate} className="space-y-6">
+                        <form onSubmit={handleUpdateName} className="space-y-6">
                             <div className="space-y-2">
                                 <Label htmlFor="name">Nome Completo</Label>
                                 <div className="relative">
@@ -90,8 +147,8 @@ export default function Profile() {
                                 <p className="text-[10px] text-muted-foreground">O e-mail não pode ser alterado diretamente.</p>
                             </div>
 
-                            <Button type="submit" className="w-full md:w-auto" disabled={isLoading}>
-                                {isLoading ? "Salvando..." : "Salvar Alterações"}
+                            <Button type="submit" className="w-full md:w-auto" disabled={isUpdatingName}>
+                                {isUpdatingName ? "Salvando..." : "Salvar Alterações"}
                             </Button>
                         </form>
                     </CardContent>

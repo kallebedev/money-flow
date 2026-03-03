@@ -78,7 +78,7 @@ export function AppSidebar() {
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton className="h-12 w-full justify-start gap-3 px-3 py-2">
                   <Avatar className="h-8 w-8 border shrink-0">
-                    <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email}`} />
+                    <AvatarImage src={user?.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email}`} />
                     <AvatarFallback className="bg-primary/10 text-primary uppercase">
                       {user?.user_metadata?.name?.substring(0, 2) || user?.email?.substring(0, 2)}
                     </AvatarFallback>
