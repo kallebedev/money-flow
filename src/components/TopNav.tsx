@@ -43,11 +43,9 @@ export default function TopNav() {
                 {/* Left Section: Logo + Switcher */}
                 <div className="flex items-center gap-4 lg:gap-6">
                     <Link to="/" className="flex items-center gap-3 group shrink-0">
-                        <img
-                            src="/logo.png"
-                            alt="MoneyFlow Logo"
-                            className="w-[32px] h-[32px] md:w-[36px] md:h-[36px] object-contain transition-transform group-hover:scale-105"
-                        />
+                        <div className="w-[32px] h-[32px] md:w-[36px] md:h-[36px] bg-[#22c55e] rounded-[10px] flex items-center justify-center transition-transform group-hover:scale-105 shadow-[0_0_20px_rgba(34,197,94,0.2)]">
+                            <span className="text-[16px] md:text-[18px] font-black text-[#0a0a0a]">$</span>
+                        </div>
                         <span className="text-[18px] font-bold tracking-tight text-[#f0f0f0] hidden sm:block">MoneyFlow</span>
                     </Link>
 
