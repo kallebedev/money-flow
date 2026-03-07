@@ -64,8 +64,12 @@ const Login = () => {
 
             <div className="w-full max-w-sm relative z-10 animate-in fade-in zoom-in-95 duration-700">
                 <div className="text-center mb-12">
-                    <div className="inline-flex items-center justify-center h-[72px] w-[72px] rounded-[18px] bg-[#22c55e] shadow-[0_0_40px_rgba(34,197,94,0.15)] mb-8 transition-transform hover:scale-105">
-                        <Wallet className="w-9 h-9 text-[#0a0a0a]" />
+                    <div className="inline-flex items-center justify-center p-4 rounded-[28px] bg-white/[0.03] border border-white/[0.05] shadow-[0_0_40px_rgba(34,197,94,0.05)] mb-8 transition-transform hover:scale-105">
+                        <img
+                            src="/logo.png"
+                            alt="MoneyFlow Logo"
+                            className="w-16 h-16 object-contain"
+                        />
                     </div>
                     <h1 className="text-[28px] font-normal font-mono tracking-[-0.04em] text-[#f0f0f0] mb-3">MONEYFLOW</h1>
                     <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-[#555] opacity-80">

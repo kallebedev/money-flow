@@ -190,17 +190,23 @@ export const ProductivityDashboard = ({ tasks = [], goals = [] }: { tasks: any[]
                                 </h3>
                                 <div className="mt-2 min-h-[40px] flex items-center">
                                     {aiError ? (
-                                        <div className="flex flex-col items-start gap-2">
-                                            <p className="text-red-400/80 text-xs italic leading-relaxed">
-                                                Não foi possível carregar o conselho agora (Limite de API atingido).
+                                        <div className="flex flex-col items-start gap-3 p-4 rounded-2xl bg-red-500/5 border border-red-500/10 w-full">
+                                            <div className="flex items-center gap-2">
+                                                <AlertTriangle className="w-4 h-4 text-red-400" />
+                                                <p className="text-red-400 text-[10px] font-black uppercase tracking-widest">
+                                                    Limite de Inteligência Atingido
+                                                </p>
+                                            </div>
+                                            <p className="text-white/40 text-xs italic leading-relaxed">
+                                                O mentor está descansando. Tente novamente em alguns minutos para novos insights estratégicos.
                                             </p>
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={fetchAIAdvice}
-                                                className="h-7 px-3 text-[10px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10"
+                                                className="h-7 px-4 text-[10px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all rounded-lg"
                                             >
-                                                Tentar Novamente
+                                                Verificar Disponibilidade
                                             </Button>
                                         </div>
                                     ) : (
@@ -234,13 +240,17 @@ export const ProductivityDashboard = ({ tasks = [], goals = [] }: { tasks: any[]
                     </div>
                     <div className="flex gap-2">
                         <div className="flex -space-x-2">
-                            {[1, 2, 3].map(i => (
-                                <div key={i} className="w-8 h-8 rounded-full border-2 border-[#0d0d0d] bg-white/[0.05] flex items-center justify-center">
-                                    <Trophy className="w-4 h-4 text-yellow-500/50" />
-                                </div>
-                            ))}
+                            <div className="w-8 h-8 rounded-full border-2 border-[#0d0d0d] bg-yellow-500/10 flex items-center justify-center">
+                                <Trophy className="w-4 h-4 text-yellow-500" />
+                            </div>
+                            <div className="w-8 h-8 rounded-full border-2 border-[#0d0d0d] bg-primary/10 flex items-center justify-center">
+                                <Zap className="w-4 h-4 text-primary" />
+                            </div>
+                            <div className="w-8 h-8 rounded-full border-2 border-[#0d0d0d] bg-blue-500/10 flex items-center justify-center">
+                                <Target className="w-4 h-4 text-blue-500" />
+                            </div>
                         </div>
-                        <span className="text-[10px] font-black text-white/40 mt-2">{(stats.medals || []).length} Medalhas</span>
+                        <span className="text-[10px] font-black text-white/40 mt-2">{(stats.medals || []).length} Conquistas</span>
                     </div>
                 </Card>
             </div>
