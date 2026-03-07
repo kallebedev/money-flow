@@ -9,6 +9,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, name: string) => Promise<{ error: any }>;
   logout: () => Promise<void>;
   updateProfile: (data: { name?: string; avatar_url?: string }) => Promise<{ error: any }>;
+  updateUserMetadata: (data: any) => Promise<{ error: any }>;
   loading: boolean;
 }
 
@@ -74,6 +75,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error };
   };
 
+  const updateUserMetadata = async (data: any) => {
+    const { data: updatedData, error } = await supabase.auth.updateUser({
+      data: { ...user?.user_metadata, ...data }
+    });
+
+    if (!error && updatedData.user) {
+      setUser(updatedData.user);
+    }
+
+    return { error };
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -83,7 +96,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signUp,
       logout,
       loading, // Renamed from isLoading
-      updateProfile
+      updateProfile,
+      updateUserMetadata
     }}>
       {children}
     </AuthContext.Provider>

@@ -70,6 +70,15 @@ export type Goal = {
   status: 'pending' | 'achieved' | 'failed';
 };
 
+export type DocItem = {
+  id: string;
+  name: string;
+  type: 'file' | 'folder';
+  content?: string;
+  parentId: string | null;
+  createdAt: number;
+};
+
 export type PersonalLog = {
   id: string;
   date: string;
@@ -108,7 +117,6 @@ export const DEFAULT_CATEGORIES: Category[] = [
   { id: "saude", name: "Saúde", icon: "Heart", color: "chart-5" },
   { id: "educacao", name: "Educação", icon: "GraduationCap", color: "chart-6" },
   { id: "investimentos", name: "Investimentos", icon: "TrendingUp", color: "chart-7" },
-  { id: "cartao", name: "Fatura do Cartão", icon: "CreditCard", color: "chart-8" },
   { id: "outros", name: "Outros", icon: "MoreHorizontal", color: "chart-9" },
 ];
 

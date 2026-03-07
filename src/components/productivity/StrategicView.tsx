@@ -5,9 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { 
-    Target, Briefcase, Plus, CheckCircle2, Circle, Trophy, Trash2, 
-    Pencil, X, Check, Youtube, Play, Folder, FileText, 
+import {
+    Target, Briefcase, Plus, CheckCircle2, Circle, Trophy, Trash2,
+    Pencil, X, Check, Youtube, Play, Folder, FileText,
     ChevronRight, Save, ArrowLeft, Search
 } from 'lucide-react';
 import { useProductivity } from '@/hooks/useProductivity';
@@ -50,13 +50,16 @@ const StrategicView: React.FC = () => {
     const [youtubeLinkValue, setYoutubeLinkValue] = useState('');
     const [activeVideoGoal, setActiveVideoGoal] = useState<Goal | null>(null);
     const [videoProgressMap, setVideoProgressMap] = useState<Record<string, number>>({});
-    
+
     // Documentation System States
     const [docGoal, setDocGoal] = useState<Goal | null>(null);
     const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
     const [activeFileId, setActiveFileId] = useState<string | null>(null);
     const [fileSystem, setFileSystem] = useState<DocItem[]>([]);
     const [noteDraft, setNoteDraft] = useState<string>('');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [editingDocId, setEditingDocId] = useState<string | null>(null);
+    const [editNameValue, setEditNameValue] = useState('');
 
     // Parse specific goal notes when opening drive
     useEffect(() => {
@@ -224,13 +227,40 @@ const StrategicView: React.FC = () => {
 
     const handleSaveFileContent = () => {
         if (!activeFileId) return;
-        const updated = fileSystem.map(item => 
+        const updated = fileSystem.map(item =>
             item.id === activeFileId ? { ...item, content: noteDraft } : item
         );
         setFileSystem(updated);
         persistFileSystem(updated);
         toast.success('Documento salvo no Drive!');
     };
+
+    const handleRenameDoc = (id: string) => {
+        if (!editNameValue.trim()) return;
+        const updated = fileSystem.map(item =>
+            item.id === id ? { ...item, name: editNameValue.trim() } : item
+        );
+        setFileSystem(updated);
+        persistFileSystem(updated);
+        setEditingDocId(null);
+        toast.success('Renomeado com sucesso');
+    };
+
+    const filteredDocItems = fileSystem.filter(item => {
+        const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesFolder = item.parentId === (searchTerm ? item.parentId : currentFolderId);
+        return searchTerm ? matchesSearch : matchesFolder;
+    });
+
+    const breadcrumbs = [];
+    let tempId = currentFolderId;
+    while (tempId) {
+        const folder = fileSystem.find(i => i.id === tempId);
+        if (folder) {
+            breadcrumbs.unshift(folder);
+            tempId = folder.parentId;
+        } else break;
+    }
 
     const renderGoalItem = (goal: Goal) => {
         const currentProgress = videoProgressMap[goal.id] !== undefined ? videoProgressMap[goal.id] : (goal.progress || 0);
@@ -324,7 +354,7 @@ const StrategicView: React.FC = () => {
                 )}
 
                 <div className="mt-4 pl-8 border-t border-white/[0.03] pt-4">
-                    <div 
+                    <div
                         className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/[0.03] cursor-pointer transition-all group/drive active:scale-[0.98]"
                         onClick={() => setDocGoal(goal)}
                     >
@@ -464,7 +494,7 @@ const StrategicView: React.FC = () => {
                             return JSON.parse(notes).items || [];
                         }
                         return notes ? [{ id: 'root-doc', name: 'Anotações', type: 'file', content: notes, parentId: null, createdAt: 0 }] : [];
-                    } catch(e) { return []; }
+                    } catch (e) { return []; }
                 })()}
                 onSaveProgress={handleSaveProgress}
                 onLiveProgress={handleLiveProgressUpdate}
@@ -487,27 +517,45 @@ const StrategicView: React.FC = () => {
                                             {docGoal?.title}
                                         </DialogTitle>
                                         <div className="flex items-center gap-2 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">
-                                            <span className="hover:text-primary cursor-pointer" onClick={() => { setCurrentFolderId(null); setActiveFileId(null); }}>Meu Drive</span>
-                                            {currentFolderId && <><ChevronRight className="w-3 h-3 opacity-30" /> <span className="text-blue-400">{fileSystem.find(i => i.id === currentFolderId)?.name}</span></>}
+                                            <span className="hover:text-primary cursor-pointer" onClick={() => { setCurrentFolderId(null); setActiveFileId(null); setSearchTerm(''); }}>Drive</span>
+                                            {breadcrumbs.map(b => (
+                                                <React.Fragment key={b.id}>
+                                                    <ChevronRight className="w-3 h-3 opacity-30" />
+                                                    <span className="hover:text-blue-400 cursor-pointer" onClick={() => { setCurrentFolderId(b.id); setActiveFileId(null); setSearchTerm(''); }}>{b.name}</span>
+                                                </React.Fragment>
+                                            ))}
                                             {activeFileId && <><ChevronRight className="w-3 h-3 opacity-30" /> <span className="text-emerald-400">{fileSystem.find(i => i.id === activeFileId)?.name}</span></>}
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex gap-2">
-                                    {!activeFileId ? (
-                                        <>
-                                            <Button size="sm" onClick={() => handleCreateItem('folder')} variant="outline" className="h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest gap-2">
-                                                <Plus className="w-3.5 h-3.5" /> Pasta
-                                            </Button>
-                                            <Button size="sm" onClick={() => handleCreateItem('file')} className="h-9 px-4 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest gap-2">
-                                                <Plus className="w-3.5 h-3.5" /> Doc
-                                            </Button>
-                                        </>
-                                    ) : (
-                                        <Button size="sm" onClick={handleSaveFileContent} className="h-9 px-6 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest gap-2">
-                                            <Save className="w-3.5 h-3.5" /> Salvar
-                                        </Button>
+                                <div className="flex items-center gap-3">
+                                    {!activeFileId && (
+                                        <div className="relative w-40">
+                                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                                            <Input
+                                                placeholder="Buscar..."
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                className="pl-8 h-8 text-[11px] bg-white/[0.02] border-white/[0.05] rounded-xl"
+                                            />
+                                        </div>
                                     )}
+                                    <div className="flex gap-2">
+                                        {!activeFileId ? (
+                                            <>
+                                                <Button size="sm" onClick={() => handleCreateItem('folder')} variant="outline" className="h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest gap-2">
+                                                    <Plus className="w-3.5 h-3.5" /> Pasta
+                                                </Button>
+                                                <Button size="sm" onClick={() => handleCreateItem('file')} className="h-9 px-4 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest gap-2">
+                                                    <Plus className="w-3.5 h-3.5" /> Doc
+                                                </Button>
+                                            </>
+                                        ) : (
+                                            <Button size="sm" onClick={handleSaveFileContent} className="h-9 px-6 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest gap-2">
+                                                <Save className="w-3.5 h-3.5" /> Salvar
+                                            </Button>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </DialogHeader>
@@ -530,7 +578,7 @@ const StrategicView: React.FC = () => {
                             ) : (
                                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                                     {fileSystem.filter(i => i.parentId === currentFolderId).map(item => (
-                                        <div 
+                                        <div
                                             key={item.id}
                                             className="group relative bg-white/[0.02] border border-white/[0.05] rounded-[24px] p-4 hover:bg-white/[0.05] cursor-pointer"
                                             onClick={() => item.type === 'folder' ? setCurrentFolderId(item.id) : (setActiveFileId(item.id), setNoteDraft(item.content || ''))}
@@ -540,19 +588,41 @@ const StrategicView: React.FC = () => {
                                                     {item.type === 'folder' ? <Folder className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
                                                 </div>
                                                 <div className="min-w-0">
-                                                    <p className="text-xs font-bold text-white/90 truncate">{item.name}</p>
-                                                    <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mt-1">{item.type === 'folder' ? 'Pasta' : 'Doc'}</p>
+                                                    {editingDocId === item.id ? (
+                                                        <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                                                            <Input
+                                                                value={editNameValue}
+                                                                onChange={e => setEditNameValue(e.target.value)}
+                                                                onKeyDown={e => e.key === 'Enter' && handleRenameDoc(item.id)}
+                                                                className="h-6 text-[10px] px-1"
+                                                                autoFocus
+                                                            />
+                                                            <Button size="icon" variant="ghost" className="h-6 w-6 text-emerald-500" onClick={() => handleRenameDoc(item.id)}>
+                                                                <Save className="w-3 h-3" />
+                                                            </Button>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            <p className="text-xs font-bold text-white/90 truncate">{item.name}</p>
+                                                            <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mt-1">{item.type === 'folder' ? 'Pasta' : 'Doc'}</p>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </div>
-                                            <Button size="icon" variant="ghost" className="absolute top-2 right-2 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); handleDeleteItem(item.id); }}>
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </Button>
+                                            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100">
+                                                <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full hover:bg-white/10" onClick={(e) => { e.stopPropagation(); setEditingDocId(item.id); setEditNameValue(item.name); }}>
+                                                    <Pencil className="w-3 h-3" />
+                                                </Button>
+                                                <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full hover:bg-red-500/20 hover:text-red-500" onClick={(e) => { e.stopPropagation(); handleDeleteItem(item.id); }}>
+                                                    <Trash2 className="w-3 h-3" />
+                                                </Button>
+                                            </div>
                                         </div>
                                     ))}
-                                    {fileSystem.filter(i => i.parentId === currentFolderId).length === 0 && (
+                                    {filteredDocItems.length === 0 && (
                                         <div className="col-span-full py-20 flex flex-col items-center justify-center text-center opacity-20">
-                                            <Plus className="w-8 h-8 mb-4" />
-                                            <p className="text-[10px] font-black uppercase tracking-[0.3em]">Pasta Vazia</p>
+                                            <Search className="w-8 h-8 mb-4" />
+                                            <p className="text-[10px] font-black uppercase tracking-[0.3em]">{searchTerm ? 'Nada encontrado' : 'Pasta Vazia'}</p>
                                         </div>
                                     )}
                                 </div>

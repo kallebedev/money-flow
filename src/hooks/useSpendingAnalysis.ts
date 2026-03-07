@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { useFinanceData } from "./useFinanceData";
 import { Transaction } from "@/lib/types";
+import { useAuth } from "@/contexts/AuthContext";
 import { analyzeFinanceHealth, AIFinanceHealth } from "../lib/openai";
 
 export interface SpendingInsight {
@@ -14,8 +15,14 @@ export interface SpendingInsight {
 }
 
 export function useSpendingAnalysis(transactionsOverride?: Transaction[]) {
+    const { user } = useAuth();
     const { transactions: rawTransactions, categories, monthlySalary, goals } = useFinanceData();
     const transactions = transactionsOverride || rawTransactions;
+
+    // User Settings for Score
+    const idealSavingsRate = user?.user_metadata?.idealSavingsRate ?? 0.2;
+    const emergencyFundMonths = user?.user_metadata?.emergencyFundMonths ?? 6;
+    const maxDebtRatio = user?.user_metadata?.maxDebtRatio ?? 0.3;
 
     const [aiHealth, setAiHealth] = useState<AIFinanceHealth | null>(null);
     const [isAILoading, setIsAILoading] = useState(false);
@@ -115,14 +122,14 @@ export function useSpendingAnalysis(transactionsOverride?: Transaction[]) {
         let savingsScore = 0;
         if (projectedIncome > 0) {
             const savingsRate = (projectedIncome - totalExpenses) / projectedIncome;
-            if (savingsRate >= 0.2) savingsScore = 25;
-            else if (savingsRate > 0) savingsScore = (savingsRate / 0.2) * 25;
+            if (savingsRate >= idealSavingsRate) savingsScore = 25;
+            else if (savingsRate > 0) savingsScore = (savingsRate / idealSavingsRate) * 25;
         }
 
         const reserveGoals = goals.filter(g => g.name.toLowerCase().includes("reserva") || g.name.toLowerCase().includes("emergência"));
         const currentReserve = reserveGoals.reduce((acc, g) => acc + g.currentAmount, 0);
         const avgMonthlyExpense = totalExpenses / numMonths;
-        const targetReserve = avgMonthlyExpense * 6;
+        const targetReserve = avgMonthlyExpense * emergencyFundMonths;
 
         let reserveScore = 0;
         if (targetReserve > 0) reserveScore = Math.min(20, (currentReserve / targetReserve) * 20);
@@ -140,14 +147,14 @@ export function useSpendingAnalysis(transactionsOverride?: Transaction[]) {
         } else if (totalExpenses === 0) distributionScore = 20;
 
         const cardExpense = transactions
-            .filter(t => t.type === "expense" && (t.paymentMethod === "cartao" || categories.find(c => c.id === t.category)?.name.toLowerCase().includes("cartao")))
+            .filter(t => t.type === "expense" && t.paymentMethod === "cartao")
             .reduce((acc, t) => acc + t.amount, 0);
 
         let debtScore = 15;
         if (projectedIncome > 0 && cardExpense > 0) {
             const debtRatio = cardExpense / projectedIncome;
-            if (debtRatio <= 0.3) debtScore = 15;
-            else if (debtRatio <= 0.6) debtScore = Math.max(0, 15 - ((debtRatio - 0.3) / 0.3) * 15);
+            if (debtRatio <= maxDebtRatio) debtScore = 15;
+            else if (debtRatio <= (maxDebtRatio * 2)) debtScore = Math.max(0, 15 - ((debtRatio - maxDebtRatio) / maxDebtRatio) * 15);
             else debtScore = 0;
         } else if (cardExpense === 0) debtScore = 15;
 
@@ -167,8 +174,8 @@ export function useSpendingAnalysis(transactionsOverride?: Transaction[]) {
         const finalScore = Math.round(savingsScore + reserveScore + distributionScore + debtScore + diversificationScore + regularityScore);
 
         let advice = "Seu padrão de gastos está exemplar. Continue mantendo o foco em seus objetivos de longo prazo.";
-        if (reserveScore < 10) advice = "Sua reserva de emergência está baixa. Ter pelo menos 6 meses de despesas guardados é vital para sua segurança.";
-        else if (savingsScore < 15) advice = "Sua taxa de poupança está abaixo do ideal. Tente guardar pelo menos 20% da sua renda mensal.";
+        if (reserveScore < 10) advice = `Sua reserva de emergência está baixa. Ter pelo menos ${emergencyFundMonths} meses de despesas guardados é vital para sua segurança conforme sua meta.`;
+        else if (savingsScore < 15) advice = `Sua taxa de poupança está abaixo do ideal de ${idealSavingsRate * 100}%. Tente otimizar seus gastos.`;
         else if (distributionScore < 12) advice = "Gastos fixos/essenciais estão muito altos. Tente reduzir contas básicas para liberar mais fluxo de caixa.";
         else if (debtScore < 8) advice = "Cuidado com o uso do cartão. Você está comprometendo uma fatia perigosa da sua renda futura.";
 

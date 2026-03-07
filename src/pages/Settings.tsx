@@ -2,8 +2,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Bell, CreditCard, Shield, Globe } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 
 export default function Settings() {
+    const { user, updateUserMetadata } = useAuth();
     return (
         <div className="max-w-4xl mx-auto space-y-8 animate-fade-in px-4">
             <div>
@@ -12,6 +16,64 @@ export default function Settings() {
             </div>
 
             <div className="grid gap-6">
+                <Card className="bg-[#111]/50 border-white/[0.06] overflow-hidden">
+                    <CardHeader className="border-b border-white/[0.03]">
+                        <CardTitle className="text-lg">Score Financeiro Personalizado</CardTitle>
+                        <CardDescription>Ajuste os parâmetros que definem sua saúde financeira.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-6 space-y-8">
+                        <div className="grid gap-6 md:grid-cols-3">
+                            <div className="space-y-3">
+                                <Label className="text-xs font-black uppercase tracking-widest text-[#555]">Taxa de Poupança Ideal (%)</Label>
+                                <div className="flex items-center gap-3">
+                                    <Input
+                                        type="number"
+                                        value={(user?.user_metadata?.idealSavingsRate || 0.2) * 100}
+                                        onChange={(e) => updateUserMetadata({ idealSavingsRate: Number(e.target.value) / 100 })}
+                                        className="bg-[#161616] border-white/[0.06] h-10"
+                                    />
+                                    <Badge variant="outline" className="h-10 px-3 bg-blue-500/10 text-blue-500 border-none">Poupar</Badge>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground">Padrão: 20% da renda mensal.</p>
+                            </div>
+
+                            <div className="space-y-3">
+                                <Label className="text-xs font-black uppercase tracking-widest text-[#555]">Reserva de Emergência (Meses)</Label>
+                                <div className="flex items-center gap-3">
+                                    <Input
+                                        type="number"
+                                        value={user?.user_metadata?.emergencyFundMonths || 6}
+                                        onChange={(e) => updateUserMetadata({ emergencyFundMonths: Number(e.target.value) })}
+                                        className="bg-[#161616] border-white/[0.06] h-10"
+                                    />
+                                    <Badge variant="outline" className="h-10 px-3 bg-emerald-500/10 text-emerald-500 border-none">Segurança</Badge>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground">Padrão: 6 meses de gastos fixos.</p>
+                            </div>
+
+                            <div className="space-y-3">
+                                <Label className="text-xs font-black uppercase tracking-widest text-[#555]">Limite de Cartão/Renda (%)</Label>
+                                <div className="flex items-center gap-3">
+                                    <Input
+                                        type="number"
+                                        value={(user?.user_metadata?.maxDebtRatio || 0.3) * 100}
+                                        onChange={(e) => updateUserMetadata({ maxDebtRatio: Number(e.target.value) / 100 })}
+                                        className="bg-[#161616] border-white/[0.06] h-10"
+                                    />
+                                    <Badge variant="outline" className="h-10 px-3 bg-red-500/10 text-red-500 border-none">Dívida</Badge>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground">Padrão: Máximo 30% da renda.</p>
+                            </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-white/[0.03]">
+                            <p className="text-[11px] text-muted-foreground italic">
+                                * Essas configurações afetam diretamente o seu Health Score no Dashboard e os conselhos da IA.
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+
                 <Card className="bg-[#111]/50 border-white/[0.06] overflow-hidden">
                     <CardHeader className="border-b border-white/[0.03]">
                         <CardTitle className="text-lg">Aparência</CardTitle>

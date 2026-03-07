@@ -80,8 +80,8 @@ export function ReportExportButton({
     }, [allTransactions, range, startDate, endDate]);
 
     const { healthScore, insights } = useSpendingAnalysis(filteredTransactions);
-    const advisor = useAIBudgetAdvisor();
-    const advisorOverview = advisor?.overview;
+    const advisorData = useAIBudgetAdvisor();
+    const advisorOverview = advisorData.advisor?.overview;
 
     const totalIncome = useMemo(() =>
         filteredTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0),
@@ -89,12 +89,12 @@ export function ReportExportButton({
     );
 
     const totalExpense = useMemo(() =>
-        filteredTransactions.filter(t => t.type === 'expense' && t.category !== 'cartao').reduce((s, t) => s + t.amount, 0),
+        filteredTransactions.filter(t => t.type === 'expense' && t.paymentMethod !== 'cartao').reduce((s, t) => s + t.amount, 0),
         [filteredTransactions]
     );
 
     const periodBalance = useMemo(() =>
-        filteredTransactions.reduce((s, t) => s + (t.type === 'income' ? t.amount : (t.category !== 'cartao' ? -t.amount : 0)), 0),
+        filteredTransactions.reduce((s, t) => s + (t.type === 'income' ? t.amount : (t.paymentMethod !== 'cartao' ? -t.amount : 0)), 0),
         [filteredTransactions]
     );
 
@@ -122,7 +122,7 @@ export function ReportExportButton({
 
     const prevBalance = prevMonthTransactions.reduce((acc, t) => {
         if (t.type === "income") return acc + t.amount;
-        if (t.category !== "cartao") return acc - t.amount;
+        if (t.paymentMethod !== "cartao") return acc - t.amount;
         return acc;
     }, 0);
 

@@ -333,7 +333,7 @@ export function useFinanceData() {
   const balance = useMemo(
     () => transactions.reduce((s, t) => {
       if (t.type === "income") return s + t.amount;
-      // Subtract if it is NOT a card expense
+      // Subtract if it is NOT a credit card expense
       if (t.paymentMethod !== "cartao") return s - t.amount;
       return s;
     }, 0),

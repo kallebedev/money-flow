@@ -1,25 +1,18 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import ReactPlayer from 'react-player';
-import { Goal } from '@/lib/types';
+import { Goal, DocItem } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import {
     Youtube, Folder, FileText, ChevronRight, Save,
-    ArrowLeft, Plus, Trash2, X, Maximize2, Minimize2
+    ArrowLeft, Plus, Trash2, X, Maximize2, Minimize2,
+    Search, Pencil
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-
-type DocItem = {
-    id: string;
-    name: string;
-    type: 'file' | 'folder';
-    content?: string;
-    parentId: string | null;
-    createdAt: number;
-};
 
 interface YoutubePlayerDialogProps {
     goal: Goal | null;
@@ -49,6 +42,9 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
     const [activeFileId, setActiveFileId] = useState<string | null>(null);
     const [noteDraft, setNoteDraft] = useState<string>('');
     const [isFullScreen, setIsFullScreen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [editingDocId, setEditingDocId] = useState<string | null>(null);
+    const [editNameValue, setEditNameValue] = useState('');
 
     useEffect(() => {
         if (isOpen) {
@@ -130,6 +126,40 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
             setNoteDraft('');
         }
     };
+
+    const handleDeleteLocalItem = (id: string) => {
+        const updated = localFileSystem.filter(item => item.id !== id);
+        setLocalFileSystem(updated);
+        if (onSaveNotes) onSaveNotes(updated);
+        toast.success('Nota removida');
+    };
+
+    const handleRenameLocalDoc = (id: string) => {
+        if (!editNameValue.trim()) return;
+        const updated = localFileSystem.map(item =>
+            item.id === id ? { ...item, name: editNameValue.trim() } : item
+        );
+        setLocalFileSystem(updated);
+        if (onSaveNotes) onSaveNotes(updated);
+        setEditingDocId(null);
+        toast.success('Renomeado com sucesso');
+    };
+
+    const filteredDocItems = localFileSystem.filter(item => {
+        const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesFolder = item.parentId === (searchTerm ? item.parentId : currentFolderId);
+        return searchTerm ? matchesSearch : matchesFolder;
+    });
+
+    const breadcrumbs = [];
+    let tempId = currentFolderId;
+    while (tempId) {
+        const folder = localFileSystem.find(i => i.id === tempId);
+        if (folder) {
+            breadcrumbs.unshift(folder);
+            tempId = folder.parentId;
+        } else break;
+    }
 
     if (!goal || !goal.youtubeLink) return null;
 
@@ -223,22 +253,46 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
                     {/* Right: Study Docs (Col 5/12) */}
                     <div className="flex-1 lg:flex-[5] bg-[#0a0a0a] flex flex-col h-full overflow-hidden">
                         <div className="p-4 border-b border-white/[0.05] bg-white/[0.01] flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <div className="p-2 bg-blue-500/10 rounded-lg">
-                                    <Folder className="w-4 h-4 text-blue-500" />
+                            <div className="flex flex-col min-w-0">
+                                <div className="flex items-center gap-2">
+                                    <div className="p-2 bg-blue-500/10 rounded-lg">
+                                        <Folder className="w-3.5 h-3.5 text-blue-500" />
+                                    </div>
+                                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/40">Notas de Estudo</span>
                                 </div>
-                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/50">Notas de Estudo</span>
+                                <div className="flex items-center gap-1.5 mt-1 text-[8px] font-black text-muted-foreground uppercase tracking-widest overflow-hidden">
+                                    <span className="hover:text-primary cursor-pointer transition-colors" onClick={() => { setCurrentFolderId(null); setActiveFileId(null); setSearchTerm(''); }}>Drive</span>
+                                    {breadcrumbs.map(b => (
+                                        <React.Fragment key={b.id}>
+                                            <ChevronRight className="w-2.5 h-2.5 opacity-30" />
+                                            <span className="hover:text-blue-400 cursor-pointer truncate max-w-[60px]" onClick={() => { setCurrentFolderId(b.id); setActiveFileId(null); setSearchTerm(''); }}>{b.name}</span>
+                                        </React.Fragment>
+                                    ))}
+                                </div>
                             </div>
-                            <div className="flex gap-2">
-                                {!activeFileId ? (
-                                    <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg" onClick={() => handleCreateLocalItem('file')}>
-                                        <Plus className="w-3.5 h-3.5 text-blue-500" />
-                                    </Button>
-                                ) : (
-                                    <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20" onClick={handleSaveLocalFile}>
-                                        <Save className="w-3.5 h-3.5 text-emerald-500" />
-                                    </Button>
+                            <div className="flex items-center gap-2">
+                                {!activeFileId && (
+                                    <div className="relative w-24 md:w-32">
+                                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                                        <Input
+                                            placeholder="Buscar..."
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            className="pl-6 h-7 text-[10px] bg-white/[0.02] border-white/[0.05] rounded-lg"
+                                        />
+                                    </div>
                                 )}
+                                <div className="flex gap-1">
+                                    {!activeFileId ? (
+                                        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg" onClick={() => handleCreateLocalItem('file')}>
+                                            <Plus className="w-3.5 h-3.5 text-blue-500" />
+                                        </Button>
+                                    ) : (
+                                        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20" onClick={handleSaveLocalFile}>
+                                            <Save className="w-3.5 h-3.5 text-emerald-500" />
+                                        </Button>
+                                    )}
+                                </div>
                             </div>
                         </div>
 
@@ -258,23 +312,47 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 gap-2">
-                                    {localFileSystem.filter(i => i.parentId === currentFolderId).map(item => (
+                                    {filteredDocItems.map(item => (
                                         <div
                                             key={item.id}
-                                            className="group flex items-center gap-3 p-3 rounded-2xl bg-white/[0.02] border border-white/[0.03] hover:bg-white/[0.05] hover:border-white/[0.1] transition-all cursor-pointer"
-                                            onClick={() => item.type === 'folder' ? setCurrentFolderId(item.id) : (setActiveFileId(item.id), setNoteDraft(item.content || ''))}
+                                            className="group flex items-center gap-3 p-3 rounded-2xl bg-white/[0.02] border border-white/[0.03] hover:bg-white/[0.05] hover:border-white/[0.1] transition-all cursor-pointer relative"
+                                            onClick={() => item.type === 'folder' ? (setCurrentFolderId(item.id), setSearchTerm('')) : (setActiveFileId(item.id), setNoteDraft(item.content || ''))}
                                         >
                                             <div className={cn("p-2 rounded-lg", item.type === 'folder' ? "bg-blue-500/10 text-blue-500" : "bg-emerald-500/10 text-emerald-500")}>
                                                 {item.type === 'folder' ? <Folder className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-[11px] font-bold text-white/80 truncate leading-none">{item.name}</p>
-                                                <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mt-1">{item.type === 'folder' ? 'Pasta' : 'Documento'}</p>
+                                                {editingDocId === item.id ? (
+                                                    <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                                                        <Input
+                                                            value={editNameValue}
+                                                            onChange={e => setEditNameValue(e.target.value)}
+                                                            onKeyDown={e => e.key === 'Enter' && handleRenameLocalDoc(item.id)}
+                                                            className="h-6 text-[10px] px-1"
+                                                            autoFocus
+                                                        />
+                                                        <Button size="icon" variant="ghost" className="h-6 w-6 text-emerald-500" onClick={() => handleRenameLocalDoc(item.id)}>
+                                                            <Save className="w-3 h-3" />
+                                                        </Button>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <p className="text-[11px] font-bold text-white/80 truncate leading-none">{item.name}</p>
+                                                        <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mt-1">{item.type === 'folder' ? 'Pasta' : 'Documento'}</p>
+                                                    </>
+                                                )}
                                             </div>
-                                            <ChevronRight className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full hover:bg-white/10" onClick={(e) => { e.stopPropagation(); setEditingDocId(item.id); setEditNameValue(item.name); }}>
+                                                    <Pencil className="w-3 h-3" />
+                                                </Button>
+                                                <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full hover:bg-red-500/20 hover:text-red-500" onClick={(e) => { e.stopPropagation(); handleDeleteLocalItem(item.id); }}>
+                                                    <Trash2 className="w-3 h-3" />
+                                                </Button>
+                                            </div>
                                         </div>
                                     ))}
-                                    {localFileSystem.filter(i => i.parentId === currentFolderId).length === 0 && (
+                                    {filteredDocItems.length === 0 && (
                                         <div className="py-20 flex flex-col items-center justify-center opacity-10">
                                             <Plus className="w-8 h-8 mb-2" />
                                             <p className="text-[10px] font-black uppercase tracking-widest">Sem notas</p>
