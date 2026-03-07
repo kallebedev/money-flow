@@ -1,10 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useSpendingAnalysis, SpendingInsight } from "@/hooks/useSpendingAnalysis";
-import { TrendingUp, TrendingDown, Minus, AlertTriangle, Info, Zap, Brain, HeartPulse } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, AlertTriangle, Info, Zap, Brain, HeartPulse, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function SpendingAnalysis() {
-    const { insights, unusualIncreases } = useSpendingAnalysis();
+    const { insights, unusualIncreases, triggerAIAnalysis, isAILoading, isUsingAI } = useSpendingAnalysis();
 
     if (insights.length === 0) return null;
 
@@ -14,6 +15,27 @@ export function SpendingAnalysis() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold tracking-tight text-foreground/90">Análise de Gastos</h2>
+                <Button
+                    onClick={triggerAIAnalysis}
+                    disabled={isAILoading}
+                    className={cn(
+                        "h-10 px-6 rounded-xl font-black uppercase text-[11px] tracking-widest gap-2 transition-all",
+                        isUsingAI ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20" : "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+                    )}
+                    variant="outline"
+                >
+                    {isAILoading ? (
+                        <>
+                            <div className="h-3 w-3 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+                            Analisando...
+                        </>
+                    ) : (
+                        <>
+                            <Sparkles className="h-4 w-4" />
+                            {isUsingAI ? "Recalcular Saúde IA" : "Análise Profunda IA"}
+                        </>
+                    )}
+                </Button>
             </div>
 
             {unusualIncreases.length > 0 && (

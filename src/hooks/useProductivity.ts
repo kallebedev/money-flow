@@ -3,12 +3,14 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProductivityTask, Goal, Project, PersonalLog } from '@/lib/types';
 import { rescheduleFollowingTasks } from '@/lib/productivity/Rescheduler';
+import { useProductivityStats } from './useProductivityStats';
 import { formatISO, format } from 'date-fns';
 import { toast } from "sonner";
 
 export const useProductivity = () => {
     const { user } = useAuth();
     const queryClient = useQueryClient();
+    const { addExperience } = useProductivityStats();
 
     // --- Queries ---
 
@@ -55,6 +57,10 @@ export const useProductivity = () => {
                 title: g.title,
                 type: g.type,
                 targetDate: g.target_date,
+                youtubeLink: g.youtube_link,
+                youtubeTimestamp: g.youtube_timestamp,
+                progress: g.progress,
+                notes: g.notes,
                 status: g.status
             })) as Goal[];
         },
@@ -170,6 +176,10 @@ export const useProductivity = () => {
                     title: goal.title,
                     type: goal.type,
                     target_date: goal.targetDate,
+                    youtube_link: goal.youtubeLink,
+                    youtube_timestamp: goal.youtubeTimestamp || 0,
+                    progress: goal.progress || 0,
+                    notes: goal.notes || '',
                     status: goal.status
                 }])
                 .select()
@@ -189,15 +199,39 @@ export const useProductivity = () => {
             if (updates.title !== undefined) dbUpdates.title = updates.title;
             if (updates.type !== undefined) dbUpdates.type = updates.type;
             if (updates.targetDate !== undefined) dbUpdates.target_date = updates.targetDate;
+            if (updates.youtubeLink !== undefined) dbUpdates.youtube_link = updates.youtubeLink;
+            if (updates.youtubeTimestamp !== undefined) dbUpdates.youtube_timestamp = updates.youtubeTimestamp;
+            if (updates.progress !== undefined) dbUpdates.progress = updates.progress;
+            if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
             if (updates.status !== undefined) dbUpdates.status = updates.status;
 
-            const { error } = await supabase
+            console.log(`[DEBUG] Supabase Updating goal ${id} with:`, dbUpdates);
+            const { data, error } = await supabase
                 .from("productivity_goals")
                 .update(dbUpdates)
-                .eq("id", id);
-            if (error) throw error;
+                .eq("id", id)
+                .select();
+
+            if (error) {
+                console.error(`[ERROR] Supabase Update Failed for goal ${id}:`, error);
+                toast.error(`Erro ao salvar progresso: ${error.message}`);
+                throw error;
+            }
+            console.log(`[DEBUG] Supabase Update Success for goal ${id}:`, data);
         },
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["productivity_goals"] }),
+        onSuccess: (data, variables) => {
+            // Optimistically update the UI without triggering a full background refetch
+            // that could instantly override our new local states (race condition in YoutubePlayerDialog)
+            queryClient.setQueryData(["productivity_goals", user?.id], (old: Goal[] | undefined) => {
+                if (!old) return old;
+                return old.map(goal => {
+                    if (goal.id === variables.id) {
+                        return { ...goal, ...variables.updates };
+                    }
+                    return goal;
+                });
+            });
+        }
     });
 
     const deleteGoalMutation = useMutation({
@@ -302,15 +336,27 @@ export const useProductivity = () => {
     return {
         tasks,
         addTask: addTaskMutation.mutate,
+        addTaskAsync: addTaskMutation.mutateAsync,
         updateTask: (id: string, updates: Partial<ProductivityTask>) => updateTaskMutation.mutate({ id, updates }),
         deleteTask: deleteTaskMutation.mutate,
         startTask: (id: string) => updateTaskMutation.mutate({ id, updates: { status: 'in-progress' } }),
-        completeTask: (id: string) => updateTaskMutation.mutate({ id, updates: { status: 'completed' } }),
+        completeTask: (id: string) => {
+            const task = tasks.find(t => t.id === id);
+            if (task) addExperience((task.impact || 1) * 100);
+            updateTaskMutation.mutate({ id, updates: { status: 'completed' } });
+        },
         delayTask: (id: string, minutes: number) => delayTaskMutation.mutate({ id, minutes }),
         toggleStatus: (id: string) => {
             const task = tasks.find(t => t.id === id);
             if (!task) return;
-            updateTaskMutation.mutate({ id, updates: { status: task.status === 'completed' ? 'todo' : 'completed' } });
+            const newStatus = task.status === 'completed' ? 'todo' : 'completed';
+
+            if (newStatus === 'completed') {
+                const xp = (task.impact || 1) * 100;
+                addExperience(xp);
+            }
+
+            updateTaskMutation.mutate({ id, updates: { status: newStatus } });
         },
         setTopThree: (id: string, isTopThree: boolean) => updateTaskMutation.mutate({ id, updates: { isTopThree } }),
 
@@ -326,6 +372,7 @@ export const useProductivity = () => {
 
         projects,
         addProject: addProjectMutation.mutate,
+        addProjectAsync: addProjectMutation.mutateAsync,
         deleteProject: deleteProjectMutation.mutate,
         toggleProjectStatus: (id: string) => {
             const project = projects.find(p => p.id === id);

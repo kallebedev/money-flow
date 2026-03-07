@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useFinanceData } from "./useFinanceData";
 import { Transaction } from "@/lib/types";
+import { analyzeFinanceHealth, AIFinanceHealth } from "../lib/openai";
 
 export interface SpendingInsight {
     categoryId: string;
@@ -16,41 +17,43 @@ export function useSpendingAnalysis(transactionsOverride?: Transaction[]) {
     const { transactions: rawTransactions, categories, monthlySalary, goals } = useFinanceData();
     const transactions = transactionsOverride || rawTransactions;
 
-    const insights = useMemo(() => {
-        if (transactions.length === 0 || categories.length === 0) return [];
+    const [aiHealth, setAiHealth] = useState<AIFinanceHealth | null>(null);
+    const [isAILoading, setIsAILoading] = useState(false);
 
+    const triggerAIAnalysis = async () => {
+        setIsAILoading(true);
+        try {
+            const result = await analyzeFinanceHealth(transactions, categories, monthlySalary);
+            setAiHealth(result);
+        } catch (err) {
+            console.error("AI Health Error:", err);
+        } finally {
+            setIsAILoading(false);
+        }
+    };
+
+    const insights = useMemo(() => {
+        // ... (existing logic remains same)
+        if (transactions.length === 0 || categories.length === 0) return [];
         const now = new Date();
         const currentMonthStr = now.toISOString().slice(0, 7);
-
-        // Detect if we are looking at a specific month or a range
         const transactionMonths = Array.from(new Set(transactions.map(t => t.date.slice(0, 7)))).sort();
         const isSingleMonth = transactionMonths.length === 1;
         const targetMonth = isSingleMonth ? transactionMonths[0] : currentMonthStr;
-
-        // Group transactions by month and category
         const monthlySpending: Record<string, Record<string, number>> = {};
         const monthsSet = new Set<string>();
 
         transactions.filter(t => t.type === "expense").forEach(t => {
             const month = t.date.slice(0, 7);
             monthsSet.add(month);
-
-            if (!monthlySpending[month]) {
-                monthlySpending[month] = {};
-            }
-
-            if (!monthlySpending[month][t.category]) {
-                monthlySpending[month][t.category] = 0;
-            }
-
+            if (!monthlySpending[month]) monthlySpending[month] = {};
+            if (!monthlySpending[month][t.category]) monthlySpending[month][t.category] = 0;
             monthlySpending[month][t.category] += t.amount;
         });
 
         const months = Array.from(monthsSet).sort();
         const previousMonths = months.filter(m => m < targetMonth);
         const currentMonthExpenses = monthlySpending[targetMonth] || {};
-
-        // If viewing range, aggregate all expenses
         const totalExpensesByCat: Record<string, number> = {};
         if (!isSingleMonth) {
             transactions.filter(t => t.type === "expense").forEach(t => {
@@ -60,53 +63,39 @@ export function useSpendingAnalysis(transactionsOverride?: Transaction[]) {
 
         const categoryInsights: SpendingInsight[] = categories.map(cat => {
             const currentAmount = isSingleMonth ? (currentMonthExpenses[cat.id] || 0) : (totalExpensesByCat[cat.id] || 0);
-
-            // Calculate average for previous months or use budget
             let totalPrevious = 0;
             let monthsWithSpending = 0;
-
             previousMonths.forEach(m => {
                 if (monthlySpending[m] && monthlySpending[m][cat.id] !== undefined) {
                     totalPrevious += monthlySpending[m][cat.id];
                     monthsWithSpending++;
                 }
             });
-
-            // Adjust comparison based on period length
             let averageAmount = cat.monthlyBudget || (monthsWithSpending > 0 ? totalPrevious / monthsWithSpending : 0);
-            if (!isSingleMonth && transactionMonths.length > 0) {
-                averageAmount = averageAmount * transactionMonths.length;
-            }
-
+            if (!isSingleMonth && transactionMonths.length > 0) averageAmount = averageAmount * transactionMonths.length;
             let percentageChange = 0;
-            if (averageAmount > 0) {
-                percentageChange = ((currentAmount - averageAmount) / averageAmount) * 100;
-            } else if (currentAmount > 0) {
-                percentageChange = 100;
-            }
-
+            if (averageAmount > 0) percentageChange = ((currentAmount - averageAmount) / averageAmount) * 100;
+            else if (currentAmount > 0) percentageChange = 100;
             let type: "increase" | "decrease" | "stable" = "stable";
             if (percentageChange > 5) type = "increase";
             else if (percentageChange < -5) type = "decrease";
-
             const isUnusual = percentageChange > 20;
-
-            return {
-                categoryId: cat.id,
-                categoryName: cat.name,
-                currentAmount,
-                averageAmount,
-                percentageChange,
-                type,
-                isUnusual
-            };
+            return { categoryId: cat.id, categoryName: cat.name, currentAmount, averageAmount, percentageChange, type, isUnusual };
         });
-
         return categoryInsights.sort((a, b) => Math.abs(b.percentageChange) - Math.abs(a.percentageChange));
-
     }, [transactions, categories]);
 
     const healthScoreData = useMemo(() => {
+        // Use AI result if available, otherwise use original heuristics
+        if (aiHealth) {
+            return {
+                score: aiHealth.score,
+                advice: aiHealth.advice,
+                status: aiHealth.status,
+                breakdown: aiHealth.breakdown
+            };
+        }
+
         if (transactions.length === 0) {
             return {
                 score: 100,
@@ -123,7 +112,6 @@ export function useSpendingAnalysis(transactionsOverride?: Transaction[]) {
         const projectedIncome = Math.max(actualIncome, monthlySalary * numMonths);
         const totalExpenses = transactions.filter(t => t.type === "expense").reduce((acc, t) => acc + t.amount, 0);
 
-        // 1. Savings Rate (25 pts)
         let savingsScore = 0;
         if (projectedIncome > 0) {
             const savingsRate = (projectedIncome - totalExpenses) / projectedIncome;
@@ -131,7 +119,6 @@ export function useSpendingAnalysis(transactionsOverride?: Transaction[]) {
             else if (savingsRate > 0) savingsScore = (savingsRate / 0.2) * 25;
         }
 
-        // 2. Emergency Reserve (20 pts)
         const reserveGoals = goals.filter(g => g.name.toLowerCase().includes("reserva") || g.name.toLowerCase().includes("emergência"));
         const currentReserve = reserveGoals.reduce((acc, g) => acc + g.currentAmount, 0);
         const avgMonthlyExpense = totalExpenses / numMonths;
@@ -141,7 +128,6 @@ export function useSpendingAnalysis(transactionsOverride?: Transaction[]) {
         if (targetReserve > 0) reserveScore = Math.min(20, (currentReserve / targetReserve) * 20);
         else if (currentReserve > 0 || totalExpenses === 0) reserveScore = 20;
 
-        // 3. Fixed vs Variable (50/30/20 Rule) (20 pts)
         const needsExpenses = transactions
             .filter(t => t.type === "expense" && NEEDS_KEYWORDS.some(k => categories.find(c => c.id === t.category)?.name.toLowerCase().includes(k)))
             .reduce((acc, t) => acc + t.amount, 0);
@@ -153,7 +139,6 @@ export function useSpendingAnalysis(transactionsOverride?: Transaction[]) {
             else if (needsRatio <= 0.8) distributionScore = 20 - ((needsRatio - 0.5) / 0.3) * 20;
         } else if (totalExpenses === 0) distributionScore = 20;
 
-        // 4. Debt Management (15 pts)
         const cardExpense = transactions
             .filter(t => t.type === "expense" && (t.paymentMethod === "cartao" || categories.find(c => c.id === t.category)?.name.toLowerCase().includes("cartao")))
             .reduce((acc, t) => acc + t.amount, 0);
@@ -166,7 +151,6 @@ export function useSpendingAnalysis(transactionsOverride?: Transaction[]) {
             else debtScore = 0;
         } else if (cardExpense === 0) debtScore = 15;
 
-        // 5. Habits (10 pts)
         const nonEssentialCats = insights.filter(i => !NEEDS_KEYWORDS.some(k => i.categoryName.toLowerCase().includes(k)));
         const totalWants = nonEssentialCats.reduce((acc, c) => acc + c.currentAmount, 0);
         const maxWant = Math.max(0, ...nonEssentialCats.map(c => c.currentAmount));
@@ -174,7 +158,6 @@ export function useSpendingAnalysis(transactionsOverride?: Transaction[]) {
         if (totalWants > 0 && maxWant / totalWants > 0.6) diversificationScore = 5;
         if (nonEssentialCats.length < 2 && totalExpenses > 0) diversificationScore = Math.min(diversificationScore, 5);
 
-        // 6. Regularity (10 pts)
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         const recentTrans = transactions.filter(t => new Date(t.date) >= thirtyDaysAgo);
@@ -207,7 +190,7 @@ export function useSpendingAnalysis(transactionsOverride?: Transaction[]) {
                 regularity: Math.round(regularityScore)
             }
         };
-    }, [transactions, categories, goals, monthlySalary, insights]);
+    }, [transactions, categories, goals, monthlySalary, insights, aiHealth]);
 
     return {
         insights,
@@ -216,6 +199,9 @@ export function useSpendingAnalysis(transactionsOverride?: Transaction[]) {
         healthStatus: healthScoreData.status,
         healthBreakdown: healthScoreData.breakdown,
         unusualIncreases: insights.filter(i => i.isUnusual),
-        topSpendingIncreases: insights.filter(i => i.type === "increase").slice(0, 3)
+        topSpendingIncreases: insights.filter(i => i.type === "increase").slice(0, 3),
+        triggerAIAnalysis,
+        isAILoading,
+        isUsingAI: !!aiHealth
     };
 }

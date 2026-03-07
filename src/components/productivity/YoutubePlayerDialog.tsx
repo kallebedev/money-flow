@@ -1,0 +1,300 @@
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import ReactPlayer from 'react-player';
+import { Goal } from '@/lib/types';
+import { Badge } from '@/components/ui/badge';
+import {
+    Youtube, Folder, FileText, ChevronRight, Save,
+    ArrowLeft, Plus, Trash2, X, Maximize2, Minimize2
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+
+type DocItem = {
+    id: string;
+    name: string;
+    type: 'file' | 'folder';
+    content?: string;
+    parentId: string | null;
+    createdAt: number;
+};
+
+interface YoutubePlayerDialogProps {
+    goal: Goal | null;
+    isOpen: boolean;
+    onClose: () => void;
+    docItems?: DocItem[];
+    onProgressUpdate?: (goalId: string, globalProgress: number) => void;
+    onLiveProgress?: (goalId: string, globalProgress: number) => void;
+    onSaveTimestamp?: (goalId: string, timestamp: number) => void;
+    onSaveProgress?: (goalId: string, progress: number, timestamp: number) => void;
+    onSaveNotes?: (items: DocItem[]) => void;
+}
+
+export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
+    goal, isOpen, onClose, docItems = [],
+    onProgressUpdate, onLiveProgress, onSaveTimestamp, onSaveProgress, onSaveNotes
+}) => {
+    const playerRef = useRef<any>(null);
+    const [lastKnownProgress, setLastKnownProgress] = useState(0);
+    const lastKnownProgressRef = useRef(0);
+    const lastKnownTimestampRef = useRef(0);
+    const saveIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Documentation States
+    const [localFileSystem, setLocalFileSystem] = useState<DocItem[]>(docItems);
+    const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+    const [activeFileId, setActiveFileId] = useState<string | null>(null);
+    const [noteDraft, setNoteDraft] = useState<string>('');
+    const [isFullScreen, setIsFullScreen] = useState(false);
+
+    useEffect(() => {
+        if (isOpen) {
+            setLocalFileSystem(docItems);
+        }
+    }, [docItems, isOpen]);
+
+    const saveCurrentProgress = useCallback(() => {
+        if (!goal) return;
+
+        let progress = lastKnownProgressRef.current;
+        let timestamp = Math.floor(lastKnownTimestampRef.current);
+
+        if (playerRef.current) {
+            try {
+                const currentTime = playerRef.current.getCurrentTime();
+                if (currentTime > 0) {
+                    timestamp = Math.floor(currentTime);
+                    const duration = playerRef.current.getDuration();
+                    if (duration > 0) {
+                        progress = Math.round((currentTime / duration) * 100);
+                    }
+                }
+            } catch (e) { }
+        }
+
+        if (onSaveProgress && (progress > 0 || timestamp > 0)) {
+            onSaveProgress(goal.id, progress, timestamp);
+        }
+    }, [goal, onSaveProgress]);
+
+    const handleProgress = useCallback((state: any) => {
+        if (!goal || state.seeking) return;
+        let globalProgress = Math.round((state.played || 0) * 100);
+        lastKnownProgressRef.current = globalProgress;
+        if (state.playedSeconds > 0) lastKnownTimestampRef.current = state.playedSeconds;
+        if (lastKnownProgress !== globalProgress) setLastKnownProgress(globalProgress);
+        if (onLiveProgress && goal) onLiveProgress(goal.id, globalProgress);
+    }, [goal, onLiveProgress, lastKnownProgress]);
+
+    const handlePlay = useCallback(() => {
+        if (saveIntervalRef.current) clearInterval(saveIntervalRef.current);
+        saveIntervalRef.current = setInterval(() => saveCurrentProgress(), 5000);
+    }, [saveCurrentProgress]);
+
+    const handlePauseOrEnd = useCallback(() => {
+        if (saveIntervalRef.current) {
+            clearInterval(saveIntervalRef.current);
+            saveIntervalRef.current = null;
+        }
+        saveCurrentProgress();
+    }, [saveCurrentProgress]);
+
+    // Documentation Helpers
+    const handleSaveLocalFile = () => {
+        if (!activeFileId) return;
+        const updated = localFileSystem.map(item =>
+            item.id === activeFileId ? { ...item, content: noteDraft } : item
+        );
+        setLocalFileSystem(updated);
+        if (onSaveNotes) onSaveNotes(updated);
+        toast.success('Nota salva!');
+    };
+
+    const handleCreateLocalItem = (type: 'file' | 'folder') => {
+        const newItem: DocItem = {
+            id: Math.random().toString(36).substr(2, 9),
+            name: type === 'file' ? 'Nota de Estudo' : 'Nova Pasta',
+            type,
+            content: '',
+            parentId: currentFolderId,
+            createdAt: Date.now()
+        };
+        const updated = [...localFileSystem, newItem];
+        setLocalFileSystem(updated);
+        if (onSaveNotes) onSaveNotes(updated);
+        if (type === 'file') {
+            setActiveFileId(newItem.id);
+            setNoteDraft('');
+        }
+    };
+
+    if (!goal || !goal.youtubeLink) return null;
+
+    const extractUrl = (text: string) => {
+        const match = text.match(/https?:\/\/[^\s]+/);
+        return match ? match[0] : text;
+    };
+
+    const cleanUrl = (() => {
+        const extracted = extractUrl(goal.youtubeLink || '');
+        if (!extracted) return '';
+        if (extracted.includes('youtube.com') || extracted.includes('youtu.be')) {
+            if (!/^https?:\/\//i.test(extracted)) return `https://${extracted}`;
+        }
+        return extracted;
+    })();
+
+    const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
+
+    return (
+        <Dialog open={isOpen} onOpenChange={(open) => {
+            if (!open) {
+                if (saveIntervalRef.current) clearInterval(saveIntervalRef.current);
+                saveCurrentProgress();
+                onClose();
+            }
+        }}>
+            <DialogContent className={cn(
+                "p-0 overflow-hidden bg-[#0a0a0a] border-white/[0.05] shadow-2xl transition-all duration-500 rounded-[32px]",
+                isFullScreen ? "sm:max-w-[95vw] h-[90vh]" : "sm:max-w-[1200px] h-[80vh]"
+            )}>
+                <div className="flex h-full flex-col lg:flex-row divide-x divide-white/[0.05]">
+                    {/* Left: Video Player (Col 7/12) */}
+                    <div className="flex-1 lg:flex-[7] bg-[#050505] flex flex-col relative min-h-[300px]">
+                        <div className="flex-1 relative group bg-black">
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+                                <Youtube className="w-12 h-12 text-white" />
+                            </div>
+                            {!isYouTube ? (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 text-muted-foreground bg-black/50">
+                                    <p className="text-sm font-medium">Link inválido.</p>
+                                </div>
+                            ) : (
+                                <ReactPlayer
+                                    ref={playerRef}
+                                    url={cleanUrl}
+                                    width="100%"
+                                    height="100%"
+                                    controls={true}
+                                    playing={isOpen}
+                                    onPlay={handlePlay}
+                                    onProgress={handleProgress}
+                                    onPause={handlePauseOrEnd}
+                                    onEnded={handlePauseOrEnd}
+                                    // @ts-ignore
+                                    config={{ youtube: { playerVars: { start: Math.floor(goal.youtubeTimestamp || 0), modestbranding: 1, rel: 0 } } }}
+                                />
+                            )}
+
+                            {/* Player Tools Overlay */}
+                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Button
+                                    size="icon"
+                                    variant="secondary"
+                                    className="h-8 w-8 rounded-full bg-black/60 hover:bg-black/80 border border-white/10 backdrop-blur-md"
+                                    onClick={() => setIsFullScreen(!isFullScreen)}
+                                >
+                                    {isFullScreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="secondary"
+                                    className="h-8 w-8 rounded-full bg-black/60 hover:bg-black/80 border border-white/10 backdrop-blur-md"
+                                    onClick={onClose}
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Video Info Bar */}
+                        <div className="p-4 border-t border-white/[0.05] bg-white/[0.02]">
+                            <h3 className="text-sm font-bold text-white/90 line-clamp-1">{goal.title}</h3>
+                            <div className="flex items-center gap-2 mt-1">
+                                <Badge variant="outline" className="text-[10px] bg-red-500/10 text-red-500 border-none px-1.5 py-0 h-4 uppercase tracking-widest font-black">Estudo Ativo</Badge>
+                                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest">Sincronizado com Drive</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Right: Study Docs (Col 5/12) */}
+                    <div className="flex-1 lg:flex-[5] bg-[#0a0a0a] flex flex-col h-full overflow-hidden">
+                        <div className="p-4 border-b border-white/[0.05] bg-white/[0.01] flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className="p-2 bg-blue-500/10 rounded-lg">
+                                    <Folder className="w-4 h-4 text-blue-500" />
+                                </div>
+                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/50">Notas de Estudo</span>
+                            </div>
+                            <div className="flex gap-2">
+                                {!activeFileId ? (
+                                    <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg" onClick={() => handleCreateLocalItem('file')}>
+                                        <Plus className="w-3.5 h-3.5 text-blue-500" />
+                                    </Button>
+                                ) : (
+                                    <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20" onClick={handleSaveLocalFile}>
+                                        <Save className="w-3.5 h-3.5 text-emerald-500" />
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                            {activeFileId ? (
+                                <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                                    <Button variant="ghost" size="sm" onClick={() => setActiveFileId(null)} className="h-7 text-[9px] font-black uppercase tracking-widest gap-2 -ml-2">
+                                        <ArrowLeft className="w-3 h-3" /> Arquivos
+                                    </Button>
+                                    <Textarea
+                                        value={noteDraft}
+                                        onChange={(e) => setNoteDraft(e.target.value)}
+                                        placeholder="Tome nota de algo importante..."
+                                        className="min-h-[400px] lg:min-h-[500px] bg-transparent border-none text-sm leading-relaxed focus-visible:ring-0 resize-none p-0 text-white/70"
+                                        autoFocus
+                                    />
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 gap-2">
+                                    {localFileSystem.filter(i => i.parentId === currentFolderId).map(item => (
+                                        <div
+                                            key={item.id}
+                                            className="group flex items-center gap-3 p-3 rounded-2xl bg-white/[0.02] border border-white/[0.03] hover:bg-white/[0.05] hover:border-white/[0.1] transition-all cursor-pointer"
+                                            onClick={() => item.type === 'folder' ? setCurrentFolderId(item.id) : (setActiveFileId(item.id), setNoteDraft(item.content || ''))}
+                                        >
+                                            <div className={cn("p-2 rounded-lg", item.type === 'folder' ? "bg-blue-500/10 text-blue-500" : "bg-emerald-500/10 text-emerald-500")}>
+                                                {item.type === 'folder' ? <Folder className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-[11px] font-bold text-white/80 truncate leading-none">{item.name}</p>
+                                                <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mt-1">{item.type === 'folder' ? 'Pasta' : 'Documento'}</p>
+                                            </div>
+                                            <ChevronRight className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        </div>
+                                    ))}
+                                    {localFileSystem.filter(i => i.parentId === currentFolderId).length === 0 && (
+                                        <div className="py-20 flex flex-col items-center justify-center opacity-10">
+                                            <Plus className="w-8 h-8 mb-2" />
+                                            <p className="text-[10px] font-black uppercase tracking-widest">Sem notas</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Breadcrumbs for Side Panel */}
+                        {!activeFileId && currentFolderId && (
+                            <div className="p-3 border-t border-white/[0.05] bg-black/40">
+                                <Button variant="ghost" size="sm" onClick={() => setCurrentFolderId(null)} className="h-6 text-[9px] font-black uppercase tracking-widest">
+                                    <ArrowLeft className="w-3 h-3 mr-2" /> Voltar ao Início
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+};

@@ -63,6 +63,10 @@ export type Goal = {
   title: string;
   type: 'annual' | 'monthly';
   targetDate: string;
+  youtubeLink?: string;
+  youtubeTimestamp?: number;
+  progress?: number;
+  notes?: string;
   status: 'pending' | 'achieved' | 'failed';
 };
 
@@ -107,3 +111,24 @@ export const DEFAULT_CATEGORIES: Category[] = [
   { id: "cartao", name: "Fatura do Cartão", icon: "CreditCard", color: "chart-8" },
   { id: "outros", name: "Outros", icon: "MoreHorizontal", color: "chart-9" },
 ];
+
+export type Medal = {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  unlockedAt: string;
+};
+
+export type UserStats = {
+  userId: string;
+  level: number;
+  experience: number;
+  points: number;
+  streakCurrent: number;
+  streakMax: number;
+  medals: Medal[];
+  totalFocusMinutes: number;
+  lastActiveDate: string;
+  updatedAt: string;
+};

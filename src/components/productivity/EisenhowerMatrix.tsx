@@ -97,7 +97,7 @@ const EisenhowerMatrix: React.FC<EisenhowerMatrixProps> = ({ tasks, onToggleStat
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2">
                                                     <p className={cn(
-                                                        "text-sm font-medium leading-none truncate",
+                                                        "text-sm font-medium leading-none break-words",
                                                         task.status === 'completed' && "line-through opacity-50 text-muted-foreground"
                                                     )}>
                                                         {task.title}

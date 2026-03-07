@@ -1,14 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Goal, Project } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Target, Briefcase, Plus, CheckCircle2, Circle, Trophy, Trash2, Pencil, X, Check } from 'lucide-react';
+import { 
+    Target, Briefcase, Plus, CheckCircle2, Circle, Trophy, Trash2, 
+    Pencil, X, Check, Youtube, Play, Folder, FileText, 
+    ChevronRight, Save, ArrowLeft, Search
+} from 'lucide-react';
 import { useProductivity } from '@/hooks/useProductivity';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { YoutubePlayerDialog } from './YoutubePlayerDialog';
+import { Textarea } from '@/components/ui/textarea';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+
+type DocItem = {
+    id: string;
+    name: string;
+    type: 'file' | 'folder';
+    content?: string;
+    parentId: string | null;
+    createdAt: number;
+};
 
 const StrategicView: React.FC = () => {
     const {
@@ -18,19 +39,76 @@ const StrategicView: React.FC = () => {
     } = useProductivity();
 
     const [newGoal, setNewGoal] = useState('');
+    const [newGoalYoutubeLink, setNewGoalYoutubeLink] = useState('');
+    const [showNewGoalYoutubeInput, setShowNewGoalYoutubeInput] = useState(false);
     const [newProject, setNewProject] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
 
+    // YouTube specific states
+    const [editingYoutubeId, setEditingYoutubeId] = useState<string | null>(null);
+    const [youtubeLinkValue, setYoutubeLinkValue] = useState('');
+    const [activeVideoGoal, setActiveVideoGoal] = useState<Goal | null>(null);
+    const [videoProgressMap, setVideoProgressMap] = useState<Record<string, number>>({});
+    
+    // Documentation System States
+    const [docGoal, setDocGoal] = useState<Goal | null>(null);
+    const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+    const [activeFileId, setActiveFileId] = useState<string | null>(null);
+    const [fileSystem, setFileSystem] = useState<DocItem[]>([]);
+    const [noteDraft, setNoteDraft] = useState<string>('');
+
+    // Parse specific goal notes when opening drive
+    useEffect(() => {
+        if (docGoal) {
+            try {
+                if (docGoal.notes && docGoal.notes.startsWith('{')) {
+                    const parsed = JSON.parse(docGoal.notes);
+                    setFileSystem(parsed.items || []);
+                } else {
+                    // Backward compatibility: Convert string note to a root file
+                    setFileSystem([{
+                        id: 'root-doc',
+                        name: 'Anotações Iniciais',
+                        type: 'file',
+                        content: docGoal.notes || '',
+                        parentId: null,
+                        createdAt: Date.now()
+                    }]);
+                }
+            } catch (e) {
+                setFileSystem([]);
+            }
+        } else {
+            setFileSystem([]);
+            setCurrentFolderId(null);
+            setActiveFileId(null);
+        }
+    }, [docGoal]);
+
     const submitGoal = (type: 'annual' | 'monthly') => {
         if (!newGoal.trim()) return;
+
+        let finalUrl = newGoalYoutubeLink.trim();
+        if (finalUrl) {
+            const urlMatch = finalUrl.match(/https?:\/\/[^\s]+/);
+            if (urlMatch) finalUrl = urlMatch[0];
+            if (!/^https?:\/\//i.test(finalUrl) && (finalUrl.includes('youtube.com') || finalUrl.includes('youtu.be'))) {
+                finalUrl = 'https://' + finalUrl;
+            }
+        }
+
         addGoal({
             title: newGoal.trim(),
             type,
             targetDate: new Date().toISOString(),
+            youtubeLink: finalUrl || undefined,
             status: 'pending'
         });
+
         setNewGoal('');
+        setNewGoalYoutubeLink('');
+        setShowNewGoalYoutubeInput(false);
         toast.success(`Meta ${type === 'annual' ? 'anual' : 'mensal'} adicionada!`);
     };
 
@@ -64,59 +142,208 @@ const StrategicView: React.FC = () => {
         toast.success('Projeto atualizado');
     };
 
-    const renderGoalItem = (goal: Goal) => (
-        <div key={goal.id} className="flex items-center justify-between p-3 rounded-xl bg-background/30 border border-white/[0.03] hover:border-primary/20 transition-all group">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-                <button onClick={() => toggleGoalStatus(goal.id)} className="shrink-0">
-                    {goal.status === 'achieved' ?
-                        <CheckCircle2 className="w-5 h-5 text-emerald-500" /> :
-                        <Circle className="w-5 h-5 text-muted-foreground hover:text-primary transition-colors" />
-                    }
-                </button>
+    const handleSaveYoutubeLink = (id: string) => {
+        let finalUrl = youtubeLinkValue.trim();
+        if (!finalUrl) {
+            toast.error('O link não pode estar vazio.');
+            return;
+        }
 
-                {editingId === goal.id ? (
-                    <div className="flex items-center gap-2 flex-1">
+        const urlMatch = finalUrl.match(/https?:\/\/[^\s]+/);
+        if (urlMatch) finalUrl = urlMatch[0];
+        if (!/^https?:\/\//i.test(finalUrl) && (finalUrl.includes('youtube.com') || finalUrl.includes('youtu.be'))) {
+            finalUrl = 'https://' + finalUrl;
+        }
+
+        updateGoal(id, { youtubeLink: finalUrl });
+        setEditingYoutubeId(null);
+        setYoutubeLinkValue('');
+        toast.success('Link do YouTube atualizado!');
+    };
+
+    const handleLiveProgressUpdate = (goalId: string, globalProgress: number) => {
+        setVideoProgressMap(prev => ({ ...prev, [goalId]: globalProgress }));
+    };
+
+    const handleSaveProgress = (goalId: string, progress: number, timestamp: number) => {
+        const goal = goals.find(g => g.id === goalId);
+        if (!goal) return;
+
+        const updates: Partial<Goal> = {};
+        let shouldUpdate = false;
+
+        if (progress !== goal.progress) {
+            updates.progress = progress;
+            shouldUpdate = true;
+        }
+        if (timestamp !== goal.youtubeTimestamp) {
+            updates.youtubeTimestamp = timestamp;
+            shouldUpdate = true;
+        }
+
+        if (shouldUpdate) {
+            if (progress >= 95 && goal.status !== 'achieved') {
+                updates.progress = 100;
+                updates.status = 'achieved';
+                toast.success('Meta concluída automaticamente pelo progresso do vídeo!');
+            }
+            updateGoal(goalId, updates);
+        }
+    };
+
+    // File System Helpers
+    const persistFileSystem = (items: DocItem[]) => {
+        if (!docGoal) return;
+        updateGoal(docGoal.id, { notes: JSON.stringify({ items }) });
+    };
+
+    const handleCreateItem = (type: 'file' | 'folder') => {
+        const name = type === 'file' ? 'Novo Documento' : 'Nova Pasta';
+        const newItem: DocItem = {
+            id: Math.random().toString(36).substr(2, 9),
+            name,
+            type,
+            content: '',
+            parentId: currentFolderId,
+            createdAt: Date.now()
+        };
+        const updated = [...fileSystem, newItem];
+        setFileSystem(updated);
+        persistFileSystem(updated);
+        if (type === 'file') {
+            setActiveFileId(newItem.id);
+            setNoteDraft('');
+        }
+    };
+
+    const handleDeleteItem = (id: string) => {
+        const updated = fileSystem.filter(item => item.id !== id && item.parentId !== id);
+        setFileSystem(updated);
+        persistFileSystem(updated);
+    };
+
+    const handleSaveFileContent = () => {
+        if (!activeFileId) return;
+        const updated = fileSystem.map(item => 
+            item.id === activeFileId ? { ...item, content: noteDraft } : item
+        );
+        setFileSystem(updated);
+        persistFileSystem(updated);
+        toast.success('Documento salvo no Drive!');
+    };
+
+    const renderGoalItem = (goal: Goal) => {
+        const currentProgress = videoProgressMap[goal.id] !== undefined ? videoProgressMap[goal.id] : (goal.progress || 0);
+
+        return (
+            <div key={goal.id} className="flex flex-col gap-2 p-3 rounded-xl bg-background/30 border border-white/[0.03] hover:border-primary/20 transition-all group">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <button onClick={() => toggleGoalStatus(goal.id)} className="shrink-0">
+                            {goal.status === 'achieved' ?
+                                <CheckCircle2 className="w-5 h-5 text-emerald-500" /> :
+                                <Circle className="w-5 h-5 text-muted-foreground hover:text-primary transition-colors" />
+                            }
+                        </button>
+
+                        {editingId === goal.id ? (
+                            <div className="flex items-center gap-2 flex-1">
+                                <Input
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSaveEditGoal(goal.id)}
+                                    className="h-8 text-sm py-0"
+                                    autoFocus
+                                />
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-500" onClick={() => handleSaveEditGoal(goal.id)}>
+                                    <Check className="w-4 h-4" />
+                                </Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={() => setEditingId(null)}>
+                                    <X className="w-4 h-4" />
+                                </Button>
+                            </div>
+                        ) : (
+                            <span className={cn(
+                                "text-sm font-medium break-words flex items-center gap-2",
+                                goal.status === 'achieved' && "line-through opacity-40 text-muted-foreground"
+                            )}>
+                                {goal.title}
+                                {goal.youtubeLink && (
+                                    <Badge variant="outline" className="text-[9px] border-none bg-red-500/10 text-red-500 px-1 py-0 h-4 cursor-pointer" onClick={() => setActiveVideoGoal(goal)}>
+                                        <Play className="w-2.5 h-2.5 mr-0.5" /> Vídeo
+                                    </Badge>
+                                )}
+                            </span>
+                        )}
+                    </div>
+
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2 shrink-0">
+                        {goal.status === 'achieved' && <Trophy className="w-4 h-4 text-amber-500 mr-1" />}
+                        {editingId !== goal.id && editingYoutubeId !== goal.id && (
+                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:text-red-500 hover:bg-red-500/10" onClick={() => { setEditingYoutubeId(goal.id); setYoutubeLinkValue(goal.youtubeLink || ''); }}>
+                                <Youtube className="w-3.5 h-3.5" />
+                            </Button>
+                        )}
+                        {editingId !== goal.id && (
+                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => handleStartEdit(goal.id, goal.title)}>
+                                <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                            </Button>
+                        )}
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:text-destructive hover:bg-destructive/10" onClick={() => deleteGoal(goal.id)}>
+                            <Trash2 className="w-3.5 h-3.5 text-muted-foreground" />
+                        </Button>
+                    </div>
+                </div>
+
+                {editingYoutubeId === goal.id && (
+                    <div className="flex items-center gap-2 mt-2 pl-8 border-t border-white/[0.05] pt-3">
+                        <Youtube className="w-4 h-4 text-red-500 shrink-0" />
                         <Input
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSaveEditGoal(goal.id)}
-                            className="h-8 text-sm py-0"
+                            value={youtubeLinkValue}
+                            onChange={(e) => setYoutubeLinkValue(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSaveYoutubeLink(goal.id)}
+                            className="h-8 text-xs py-0 bg-background/50 border-white/[0.1]"
+                            placeholder="Link do YouTube..."
                             autoFocus
                         />
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-500" onClick={() => handleSaveEditGoal(goal.id)}>
-                            <Check className="w-4 h-4" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={() => setEditingId(null)}>
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground" onClick={() => setEditingYoutubeId(null)}>
                             <X className="w-4 h-4" />
                         </Button>
                     </div>
-                ) : (
-                    <span className={cn(
-                        "text-sm font-medium truncate",
-                        goal.status === 'achieved' && "line-through opacity-40 text-muted-foreground"
-                    )}>
-                        {goal.title}
-                    </span>
                 )}
-            </div>
 
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2 shrink-0">
-                {goal.status === 'achieved' && <Trophy className="w-4 h-4 text-amber-500 mr-1" />}
-                {editingId !== goal.id && (
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => handleStartEdit(goal.id, goal.title)}>
-                        <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
-                    </Button>
+                {goal.youtubeLink && (
+                    <div className="pl-8 pr-2 w-full">
+                        <div className="mt-3 flex items-center justify-between gap-3 cursor-pointer" onClick={() => setActiveVideoGoal(goal)}>
+                            <Progress value={currentProgress} className="h-1 bg-white/[0.05]" />
+                            <span className="text-[9px] font-mono-numbers text-muted-foreground">
+                                {currentProgress}%
+                            </span>
+                        </div>
+                    </div>
                 )}
-                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:text-destructive hover:bg-destructive/10" onClick={() => deleteGoal(goal.id)}>
-                    <Trash2 className="w-3.5 h-3.5 text-muted-foreground" />
-                </Button>
+
+                <div className="mt-4 pl-8 border-t border-white/[0.03] pt-4">
+                    <div 
+                        className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/[0.03] cursor-pointer transition-all group/drive active:scale-[0.98]"
+                        onClick={() => setDocGoal(goal)}
+                    >
+                        <div className="p-2 bg-blue-500/10 rounded-lg group-hover/drive:bg-blue-500/20 transition-colors">
+                            <Folder className="w-4 h-4 text-blue-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-foreground/80 group-hover/drive:text-blue-400 transition-colors">Pasta de Documentos</p>
+                            <p className="text-[10px] text-muted-foreground">Drive das Metas • Ver arquivos</p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover/drive:opacity-100 transition-opacity" />
+                    </div>
+                </div>
             </div>
-        </div>
-    );
+        );
+    };
 
     return (
         <div className="grid gap-8 lg:grid-cols-2">
-            {/* Goals Column */}
             <div className="space-y-8">
                 <Card className="border-primary/5 bg-primary/[0.01] rounded-[32px] overflow-hidden shadow-2xl ring-1 ring-white/[0.03]">
                     <CardHeader className="pb-4">
@@ -128,57 +355,62 @@ const StrategicView: React.FC = () => {
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-8">
-                        <div className="flex gap-2 p-1 bg-background/50 border border-white/[0.03] rounded-2xl">
-                            <Input
-                                placeholder="Defina um novo norte..."
-                                value={newGoal}
-                                onChange={(e) => setNewGoal(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && submitGoal('monthly')}
-                                className="h-11 bg-transparent border-none focus-visible:ring-0 text-sm font-medium"
-                            />
-                            <div className="flex gap-1 pr-1">
-                                <Button size="sm" onClick={() => submitGoal('monthly')} className="h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-lg shadow-primary/20">Mensal</Button>
-                                <Button size="sm" onClick={() => submitGoal('annual')} variant="outline" className="h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest border-white/[0.05] hover:bg-white/[0.03]">Anual</Button>
+                        <div className="flex flex-col gap-2 p-3 bg-background/50 border border-white/[0.03] rounded-2xl">
+                            <div className="flex gap-2 items-center">
+                                <Input
+                                    placeholder="Defina um novo norte..."
+                                    value={newGoal}
+                                    onChange={(e) => setNewGoal(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && submitGoal('monthly')}
+                                    className="h-11 bg-transparent border-none focus-visible:ring-0 text-sm font-medium flex-1 px-1"
+                                />
+                                <div className="flex gap-1 pr-1 shrink-0">
+                                    <Button size="sm" onClick={() => submitGoal('monthly')} className="h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest bg-primary/10 hover:bg-primary/20 text-primary">Mensal</Button>
+                                    <Button size="sm" onClick={() => submitGoal('annual')} variant="outline" className="h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest">Anual</Button>
+                                </div>
                             </div>
-                        </div>
-
-                        {/* Monthly Goals */}
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between px-2">
-                                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground opacity-60">Foco do Mês</h4>
-                                <Badge variant="outline" className="text-[9px] border-primary/20 text-primary">{goals.filter(g => g.type === 'monthly').length}</Badge>
-                            </div>
-                            <div className="space-y-2">
-                                {goals.filter(g => g.type === 'monthly').length === 0 ? (
-                                    <p className="text-xs text-center py-8 text-muted-foreground italic border border-dashed border-white/[0.03] rounded-2xl bg-white/[0.01]">Defina suas prioridades imediatas.</p>
+                            <div className="px-2 pb-1">
+                                {!showNewGoalYoutubeInput ? (
+                                    <Button variant="ghost" size="sm" className="h-6 text-[10px] text-muted-foreground" onClick={() => setShowNewGoalYoutubeInput(true)}>
+                                        <Youtube className="w-3 h-3 mr-1.5" /> Adicionar Vídeo
+                                    </Button>
                                 ) : (
-                                    goals.filter(g => g.type === 'monthly').map(goal => renderGoalItem(goal))
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <Input
+                                            value={newGoalYoutubeLink}
+                                            onChange={(e) => setNewGoalYoutubeLink(e.target.value)}
+                                            className="h-8 text-xs bg-background/50 border-white/[0.1]"
+                                            placeholder="Link do YouTube..."
+                                            autoFocus
+                                        />
+                                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setShowNewGoalYoutubeInput(false); setNewGoalYoutubeLink(''); }}>
+                                            <X className="w-3.5 h-3.5" />
+                                        </Button>
+                                    </div>
                                 )}
                             </div>
                         </div>
 
-                        {/* Annual Goals */}
                         <div className="space-y-4">
-                            <div className="flex items-center justify-between px-2">
-                                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground opacity-60">Visão de Longo Prazo</h4>
-                                <Badge variant="outline" className="text-[9px] border-amber-500/20 text-amber-500">{goals.filter(g => g.type === 'annual').length}</Badge>
-                            </div>
+                            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground opacity-60">Foco do Mês</h4>
                             <div className="space-y-2">
-                                {goals.filter(g => g.type === 'annual').length === 0 ? (
-                                    <p className="text-xs text-center py-8 text-muted-foreground italic border border-dashed border-white/[0.03] rounded-2xl bg-white/[0.01]">Aonde você quer estar no final do ano?</p>
-                                ) : (
-                                    goals.filter(g => g.type === 'annual').map(goal => renderGoalItem(goal))
-                                )}
+                                {goals.filter(g => g.type === 'monthly').map(goal => renderGoalItem(goal))}
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground opacity-60">Visão de Longo Prazo</h4>
+                            <div className="space-y-2">
+                                {goals.filter(g => g.type === 'annual').map(goal => renderGoalItem(goal))}
                             </div>
                         </div>
                     </CardContent>
                 </Card>
             </div>
 
-            {/* Projects Column */}
             <div className="space-y-8">
                 <Card className="bg-card/20 border-white/[0.03] rounded-[32px] overflow-hidden shadow-2xl ring-1 ring-white/[0.03]">
-                    <CardHeader className="pb-4 flex flex-row items-center justify-between">
+                    <CardHeader className="pb-4">
                         <CardTitle className="text-xl font-black uppercase tracking-tight flex items-center gap-3">
                             <div className="p-2 bg-white/[0.03] rounded-xl">
                                 <Briefcase className="w-5 h-5 text-muted-foreground" />
@@ -187,122 +419,148 @@ const StrategicView: React.FC = () => {
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-8">
-                        <div className="flex gap-2 p-1 bg-background/50 border border-white/[0.03] rounded-2xl">
+                        <div className="flex gap-2 p-3 bg-background/50 border border-white/[0.03] rounded-2xl">
                             <Input
-                                placeholder="Novo projeto estrutural..."
+                                placeholder="Novo projeto..."
                                 value={newProject}
                                 onChange={(e) => setNewProject(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && submitProject()}
                                 className="h-11 bg-transparent border-none focus-visible:ring-0 text-sm font-medium"
                             />
-                            <div className="pr-1">
-                                <Button size="sm" onClick={submitProject} className="h-9 px-6 rounded-xl text-[10px] font-black uppercase tracking-widest bg-white/[0.05] hover:bg-white/[0.08] text-foreground border border-white/[0.05]">Criar</Button>
-                            </div>
+                            <Button size="sm" onClick={submitProject} className="h-9 px-6 rounded-xl text-[10px] font-black uppercase tracking-widest bg-white/[0.1] hover:bg-white/[0.2]">Criar</Button>
                         </div>
-
                         <div className="grid gap-4">
-                            {projects.length === 0 ? (
-                                <div className="text-center py-12 border border-dashed border-white/[0.05] rounded-[32px] bg-white/[0.01]">
-                                    <Briefcase className="w-8 h-8 mx-auto text-muted-foreground/20 mb-3" />
-                                    <p className="text-xs text-muted-foreground font-medium">Nenhum projeto estruturado ainda.</p>
-                                </div>
-                            ) : (
-                                projects.map(project => (
-                                    <div key={project.id} className={cn(
-                                        "p-6 rounded-[32px] bg-card/40 border border-white/[0.03] hover:border-primary/10 transition-all group relative overflow-hidden ring-1 ring-white/[0.03]",
-                                        project.status === 'completed' && "opacity-60 grayscale-[0.5]"
-                                    )}>
-                                        <div className="flex justify-between items-start mb-6 relative z-10">
-                                            <div className="flex items-start gap-4 flex-1 min-w-0">
-                                                <button
-                                                    onClick={() => toggleProjectStatus(project.id)}
-                                                    className="mt-0.5 hover:scale-110 transition-transform shrink-0"
-                                                >
-                                                    {project.status === 'completed' ?
-                                                        <CheckCircle2 className="w-6 h-6 text-emerald-500" /> :
-                                                        <Circle className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
-                                                    }
-                                                </button>
-
-                                                {editingId === project.id ? (
-                                                    <div className="flex items-center gap-2 flex-1">
-                                                        <Input
-                                                            value={editValue}
-                                                            onChange={(e) => setEditValue(e.target.value)}
-                                                            onKeyDown={(e) => e.key === 'Enter' && handleSaveEditProject(project.id)}
-                                                            className="h-8 text-sm font-bold bg-background/50 border-white/[0.1]"
-                                                            autoFocus
-                                                        />
-                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-500" onClick={() => handleSaveEditProject(project.id)}>
-                                                            <Check className="w-4 h-4" />
-                                                        </Button>
-                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={() => setEditingId(null)}>
-                                                            <X className="w-4 h-4" />
-                                                        </Button>
-                                                    </div>
-                                                ) : (
-                                                    <div className="min-w-0">
-                                                        <h4 className={cn(
-                                                            "font-black text-lg tracking-tight leading-tight truncate",
-                                                            project.status === 'completed' && "line-through text-muted-foreground"
-                                                        )}>{project.name}</h4>
-                                                        <Badge variant="outline" className={cn(
-                                                            "text-[9px] font-black uppercase tracking-widest mt-2 border-none px-0",
-                                                            project.status === 'completed' ? "text-emerald-500" : "text-primary"
-                                                        )}>
-                                                            {project.status === 'completed' ? 'Missão Cumprida' : 'Execução Ativa'}
-                                                        </Badge>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                                                {editingId !== project.id && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-9 w-9 rounded-xl hover:bg-white/5"
-                                                        onClick={() => handleStartEdit(project.id, project.name)}
-                                                    >
-                                                        <Pencil className="w-4 h-4 text-muted-foreground" />
-                                                    </Button>
-                                                )}
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-9 w-9 rounded-xl hover:text-destructive hover:bg-destructive/10"
-                                                    onClick={() => deleteProject(project.id)}
-                                                >
-                                                    <Trash2 className="w-4 h-4 text-muted-foreground" />
-                                                </Button>
+                            {projects.map(project => (
+                                <div key={project.id} className="p-6 rounded-[32px] bg-card/40 border border-white/[0.03] group relative overflow-hidden">
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div className="flex items-start gap-4 flex-1">
+                                            <button onClick={() => toggleProjectStatus(project.id)}>
+                                                {project.status === 'completed' ? <CheckCircle2 className="w-6 h-6 text-emerald-500" /> : <Circle className="w-6 h-6 text-muted-foreground" />}
+                                            </button>
+                                            <div>
+                                                <h4 className={cn("font-black text-lg tracking-tight", project.status === 'completed' && "line-through text-muted-foreground")}>{project.name}</h4>
+                                                <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest mt-2">{project.status === 'completed' ? 'Missão Cumprida' : 'Execução Ativa'}</Badge>
                                             </div>
                                         </div>
-
-                                        <div className="space-y-3 relative z-10">
-                                            <div className="flex justify-between items-end">
-                                                <div className="space-y-1">
-                                                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-50">Impacto Estratégico</p>
-                                                    <p className="text-xs font-bold">{project.status === 'completed' ? '100%' : 'Em andamento'}</p>
-                                                </div>
-                                                <div className="text-right">
-                                                    <span className="text-[10px] font-black font-mono-numbers">{project.status === 'completed' ? '100%' : '0%'}</span>
-                                                </div>
-                                            </div>
-                                            <Progress value={project.status === 'completed' ? 100 : 0} className="h-1.5 bg-white/[0.03]" />
-                                        </div>
-
-                                        {project.status === 'completed' && (
-                                            <div className="absolute top-0 right-0 p-4 opacity-[0.03] scale-150 -rotate-12 group-hover:scale-175 transition-transform">
-                                                <Trophy className="w-24 h-24" />
-                                            </div>
-                                        )}
+                                        <Button variant="ghost" size="icon" onClick={() => deleteProject(project.id)}><Trash2 className="w-4 h-4 text-muted-foreground" /></Button>
                                     </div>
-                                ))
-                            )}
+                                    <Progress value={project.status === 'completed' ? 100 : 0} className="h-1.5 bg-white/[0.03]" />
+                                </div>
+                            ))}
                         </div>
                     </CardContent>
                 </Card>
             </div>
+
+            <YoutubePlayerDialog
+                goal={activeVideoGoal}
+                isOpen={!!activeVideoGoal}
+                onClose={() => setActiveVideoGoal(null)}
+                // Provide file system for study view
+                docItems={(() => {
+                    try {
+                        const notes = activeVideoGoal?.notes;
+                        if (notes && notes.startsWith('{')) {
+                            return JSON.parse(notes).items || [];
+                        }
+                        return notes ? [{ id: 'root-doc', name: 'Anotações', type: 'file', content: notes, parentId: null, createdAt: 0 }] : [];
+                    } catch(e) { return []; }
+                })()}
+                onSaveProgress={handleSaveProgress}
+                onLiveProgress={handleLiveProgressUpdate}
+                onSaveNotes={(items) => {
+                    if (activeVideoGoal) updateGoal(activeVideoGoal.id, { notes: JSON.stringify({ items }) });
+                }}
+            />
+
+            <Dialog open={!!docGoal} onOpenChange={(open) => !open && setDocGoal(null)}>
+                <DialogContent className="sm:max-w-[800px] bg-[#0d0d0d] border-white/[0.05] p-0 overflow-hidden rounded-[40px] shadow-2xl ring-1 ring-white/[0.05]">
+                    <div className="flex flex-col">
+                        <DialogHeader className="p-8 border-b border-white/[0.05] bg-black/40">
+                            <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-blue-500 rounded-2xl shadow-xl shadow-blue-500/20">
+                                        <Folder className="w-5 h-5 text-white" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <DialogTitle className="text-xl font-black tracking-tight text-white/90">
+                                            {docGoal?.title}
+                                        </DialogTitle>
+                                        <div className="flex items-center gap-2 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">
+                                            <span className="hover:text-primary cursor-pointer" onClick={() => { setCurrentFolderId(null); setActiveFileId(null); }}>Meu Drive</span>
+                                            {currentFolderId && <><ChevronRight className="w-3 h-3 opacity-30" /> <span className="text-blue-400">{fileSystem.find(i => i.id === currentFolderId)?.name}</span></>}
+                                            {activeFileId && <><ChevronRight className="w-3 h-3 opacity-30" /> <span className="text-emerald-400">{fileSystem.find(i => i.id === activeFileId)?.name}</span></>}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    {!activeFileId ? (
+                                        <>
+                                            <Button size="sm" onClick={() => handleCreateItem('folder')} variant="outline" className="h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest gap-2">
+                                                <Plus className="w-3.5 h-3.5" /> Pasta
+                                            </Button>
+                                            <Button size="sm" onClick={() => handleCreateItem('file')} className="h-9 px-4 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest gap-2">
+                                                <Plus className="w-3.5 h-3.5" /> Doc
+                                            </Button>
+                                        </>
+                                    ) : (
+                                        <Button size="sm" onClick={handleSaveFileContent} className="h-9 px-6 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest gap-2">
+                                            <Save className="w-3.5 h-3.5" /> Salvar
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                        </DialogHeader>
+
+                        <div className="min-h-[500px] max-h-[70vh] overflow-y-auto p-8 bg-black/20">
+                            {activeFileId ? (
+                                <div className="space-y-6">
+                                    <Button variant="ghost" size="sm" onClick={() => setActiveFileId(null)} className="h-8 -ml-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-white">
+                                        <ArrowLeft className="w-3.5 h-3.5 mr-2" /> Voltar
+                                    </Button>
+                                    <div className="bg-white/[0.01] border border-white/[0.05] rounded-[32px] p-8">
+                                        <Textarea
+                                            value={noteDraft}
+                                            onChange={(e) => setNoteDraft(e.target.value)}
+                                            placeholder="Escreva seus insights..."
+                                            className="min-h-[400px] bg-transparent border-none text-base focus-visible:ring-0 resize-none p-0 text-white/80"
+                                        />
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                    {fileSystem.filter(i => i.parentId === currentFolderId).map(item => (
+                                        <div 
+                                            key={item.id}
+                                            className="group relative bg-white/[0.02] border border-white/[0.05] rounded-[24px] p-4 hover:bg-white/[0.05] cursor-pointer"
+                                            onClick={() => item.type === 'folder' ? setCurrentFolderId(item.id) : (setActiveFileId(item.id), setNoteDraft(item.content || ''))}
+                                        >
+                                            <div className="flex flex-col gap-3">
+                                                <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center", item.type === 'folder' ? "bg-blue-500/10 text-blue-500" : "bg-emerald-500/10 text-emerald-500")}>
+                                                    {item.type === 'folder' ? <Folder className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-xs font-bold text-white/90 truncate">{item.name}</p>
+                                                    <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mt-1">{item.type === 'folder' ? 'Pasta' : 'Doc'}</p>
+                                                </div>
+                                            </div>
+                                            <Button size="icon" variant="ghost" className="absolute top-2 right-2 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); handleDeleteItem(item.id); }}>
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                    {fileSystem.filter(i => i.parentId === currentFolderId).length === 0 && (
+                                        <div className="col-span-full py-20 flex flex-col items-center justify-center text-center opacity-20">
+                                            <Plus className="w-8 h-8 mb-4" />
+                                            <p className="text-[10px] font-black uppercase tracking-[0.3em]">Pasta Vazia</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

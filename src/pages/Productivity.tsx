@@ -7,6 +7,7 @@ import StrategicView from "@/components/productivity/StrategicView";
 import PersonalLogView from "@/components/productivity/PersonalLogView";
 import FocusMode from "@/components/productivity/FocusMode";
 import ConcentrationMetrics from "@/components/productivity/ConcentrationMetrics";
+import { ProductivityDashboard } from "@/components/productivity/ProductivityDashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +16,10 @@ import { Zap, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function Productivity() {
-    const { tasks, addTask, updateTask, deleteTask, startTask, completeTask, toggleStatus, setTopThree } = useProductivity();
+    const {
+        tasks, goals, addTask, updateTask, deleteTask,
+        startTask, completeTask, toggleStatus, setTopThree
+    } = useProductivity();
     const [isFocusMode, setIsFocusMode] = useState(false);
     const [focusTaskId, setFocusTaskId] = useState<string | undefined>();
 
@@ -37,10 +41,13 @@ export default function Productivity() {
                 </div>
             </div>
 
-            <Tabs defaultValue="tactical" className="w-full">
+            <Tabs defaultValue="intelligence" className="w-full">
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 mt-2">
                     <div className="overflow-x-auto pb-2 -mx-4 px-4 lg:mx-0 lg:px-0">
                         <TabsList className="bg-white/[0.02] p-1 rounded-xl h-11 border border-white/[0.03] w-max lg:w-auto">
+                            <TabsTrigger value="intelligence" className="px-3 md:px-4 data-[state=active]:bg-primary rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-widest text-nowrap">
+                                🛸 Inteligência
+                            </TabsTrigger>
                             <TabsTrigger value="strategic" className="px-3 md:px-4 data-[state=active]:bg-primary rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-widest text-nowrap">
                                 1. Estratégico
                             </TabsTrigger>
@@ -60,6 +67,10 @@ export default function Productivity() {
                         <Zap className="w-4 h-4 mr-2 group-hover:animate-pulse" /> Ativar Santuário de Foco
                     </Button>
                 </div>
+
+                <TabsContent value="intelligence" className="animate-in fade-in duration-500">
+                    <ProductivityDashboard tasks={tasks} goals={goals} />
+                </TabsContent>
 
                 <TabsContent value="strategic" className="animate-in fade-in duration-500">
                     <StrategicView />
@@ -81,7 +92,7 @@ export default function Productivity() {
                                     {top3Tasks.map((t, i) => (
                                         <div key={t.id} className="flex items-center gap-3 p-3 rounded-xl bg-background/50 border border-white/[0.03] hover:border-primary/20 transition-all cursor-pointer" onClick={() => toggleStatus(t.id)}>
                                             <div className="flex-1 min-w-0">
-                                                <p className={cn("text-sm font-bold truncate", t.status === 'completed' && "line-through opacity-50")}>{t.title}</p>
+                                                <p className={cn("text-sm font-bold break-words", t.status === 'completed' && "line-through opacity-50")}>{t.title}</p>
                                             </div>
                                             <Badge className="text-[9px] bg-primary/20 text-primary border-none">#0{i + 1}</Badge>
                                         </div>

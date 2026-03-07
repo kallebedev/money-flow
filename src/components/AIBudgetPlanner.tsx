@@ -28,9 +28,15 @@ export function AIBudgetPlanner() {
         lifestyle: "comfortable",
         priority: "essentials"
     });
-    const advisor = useAIBudgetAdvisor(profileData);
+    const [triggerAI, setTriggerAI] = useState(false);
+    const { advisor, isLoading: isAILoading, error: aiError } = useAIBudgetAdvisor(profileData, triggerAI);
     const [tempSalary, setTempSalary] = useState(monthlySalary > 0 ? monthlySalary.toString() : "");
     const [open, setOpen] = useState(false);
+
+    const handleGenerateAdvice = () => {
+        setTriggerAI(true);
+        setStep("advice");
+    };
 
     const handleSaveSalary = () => {
         const s = parseFloat(tempSalary);
@@ -228,7 +234,7 @@ export function AIBudgetPlanner() {
 
                             <div className="flex flex-col gap-3">
                                 <Button
-                                    onClick={() => setStep("advice")}
+                                    onClick={handleGenerateAdvice}
                                     className="w-full h-12 rounded-xl font-bold bg-primary hover:bg-primary/90 transition-all hover:scale-[1.02]"
                                 >
                                     Gerar Orçamento Personalizado <Sparkles className="ml-2 h-5 w-5" />
@@ -244,62 +250,79 @@ export function AIBudgetPlanner() {
                         </div>
                     )}
 
-                    {step === "advice" && advisor && (
+                    {step === "advice" && (
                         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                             <div className="flex items-center justify-between">
                                 <h3 className="font-bold flex items-center gap-2">
                                     <Sparkles className="h-5 w-5 text-primary" /> Sugestão da IA
                                 </h3>
-                                <Button variant="ghost" size="sm" onClick={() => setStep("profile")} className="text-xs h-8">
+                                <Button variant="ghost" size="sm" onClick={() => {
+                                    setStep("profile");
+                                    setTriggerAI(false);
+                                }} className="text-xs h-8">
                                     <ArrowLeft className="mr-1 h-4 w-4" /> Ajustar Perfil
                                 </Button>
                             </div>
 
-                            <div className="p-4 bg-primary/2 border border-primary/5 rounded-2xl">
-                                <p className="text-sm leading-relaxed text-foreground">
-                                    {advisor.overview}
-                                </p>
-                            </div>
+                            {isAILoading ? (
+                                <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                                    <div className="h-12 w-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+                                    <p className="text-sm font-medium animate-pulse">A IA está arquitetando seu futuro financeiro...</p>
+                                </div>
+                            ) : aiError ? (
+                                <div className="p-6 bg-destructive/5 border border-destructive/20 rounded-2xl text-center">
+                                    <p className="text-sm text-destructive font-medium mb-4">{aiError}</p>
+                                    <Button variant="outline" size="sm" onClick={handleGenerateAdvice}>Tentar Novamente</Button>
+                                </div>
+                            ) : advisor ? (
+                                <>
+                                    <div className="p-4 bg-primary/2 border border-primary/5 rounded-2xl">
+                                        <p className="text-sm leading-relaxed text-foreground">
+                                            {advisor.overview}
+                                        </p>
+                                    </div>
 
-                            <div className="grid gap-3 sm:grid-cols-3">
-                                {advisor.buckets.map((bucket) => (
-                                    <div key={bucket.category} className="bg-card border border-white/[0.03] p-4 rounded-2xl shadow-sm">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{bucket.category}</span>
-                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">{bucket.percentage}%</span>
+                                    <div className="grid gap-3 sm:grid-cols-3">
+                                        {advisor.buckets.map((bucket) => (
+                                            <div key={bucket.category} className="bg-card border border-white/[0.03] p-4 rounded-2xl shadow-sm">
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{bucket.category}</span>
+                                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">{bucket.percentage}%</span>
+                                                </div>
+                                                <div className="text-lg font-bold">
+                                                    R$ {bucket.suggestedAmount.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="pt-2">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h4 className="text-sm font-bold flex items-center gap-2">
+                                                <Lightbulb className="h-4 w-4 text-yellow-500" />
+                                                Dicas por Categoria
+                                            </h4>
+                                            <Button
+                                                onClick={applySuggestions}
+                                                className="h-9 px-4 rounded-xl font-bold bg-primary hover:bg-primary/90 transition-all hover:scale-105"
+                                            >
+                                                <Check className="mr-2 h-4 w-4" /> Aplicar Orçamentos
+                                            </Button>
                                         </div>
-                                        <div className="text-lg font-bold">
-                                            R$ {bucket.suggestedAmount.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}
+                                        <div className="grid gap-2">
+                                            {advisor.categoryAdvice.filter(a => a.suggestedAmount > 0).map((advice) => (
+                                                <div key={advice.categoryId} className="flex items-center justify-between p-3 bg-background/50 border border-white/[0.03] rounded-xl text-sm">
+                                                    <span className="font-medium">{advice.categoryName}</span>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-muted-foreground text-xs">Sugerido: <span className="text-foreground font-bold">R$ {advice.suggestedAmount.toFixed(0)}</span></span>
+                                                        <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
-                                ))}
-                            </div>
-
-                            <div className="pt-2">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h4 className="text-sm font-bold flex items-center gap-2">
-                                        <Lightbulb className="h-4 w-4 text-yellow-500" />
-                                        Dicas por Categoria
-                                    </h4>
-                                    <Button
-                                        onClick={applySuggestions}
-                                        className="h-9 px-4 rounded-xl font-bold bg-primary hover:bg-primary/90 transition-all hover:scale-105"
-                                    >
-                                        <Check className="mr-2 h-4 w-4" /> Aplicar Orçamentos
-                                    </Button>
-                                </div>
-                                <div className="grid gap-2">
-                                    {advisor.categoryAdvice.filter(a => a.suggestedAmount > 0).map((advice) => (
-                                        <div key={advice.categoryId} className="flex items-center justify-between p-3 bg-background/50 border border-white/[0.03] rounded-xl text-sm">
-                                            <span className="font-medium">{advice.categoryName}</span>
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-muted-foreground text-xs">Sugerido: <span className="text-foreground font-bold">R$ {advice.suggestedAmount.toFixed(0)}</span></span>
-                                                <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                                </>
+                            ) : null}
                         </div>
                     )}
                 </div>

@@ -122,7 +122,7 @@ const DailyPlanner: React.FC<DailyPlannerProps> = ({ tasks, onStartTask, onCompl
 
                                         <div className="flex justify-between items-center">
                                             <h4 className={cn(
-                                                "text-sm font-bold truncate tracking-tight text-[#f0f0f0]",
+                                                "text-sm font-bold break-words tracking-tight text-[#f0f0f0]",
                                                 task.status === 'completed' && "line-through"
                                             )}>
                                                 {task.title}
