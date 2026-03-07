@@ -165,6 +165,7 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
     if (!goal || !goal.youtubeLink) return null;
 
     const extractUrl = (text: string) => {
+        if (!text) return '';
         const match = text.match(/https?:\/\/[^\s]+/);
         return match ? match[0] : text;
     };
@@ -172,13 +173,16 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
     const cleanUrl = (() => {
         const extracted = extractUrl(goal.youtubeLink || '');
         if (!extracted) return '';
+        // Basic check to see if it looks like a URL
         if (extracted.includes('youtube.com') || extracted.includes('youtu.be')) {
             if (!/^https?:\/\//i.test(extracted)) return `https://${extracted}`;
+            return extracted;
         }
+        // If it's not a youtube link but we are in a youtube player dialog, we might want to flag it
         return extracted;
     })();
 
-    const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
+    const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be') || cleanUrl.includes('vimeo.com') || cleanUrl.includes('facebook.com');
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => {
