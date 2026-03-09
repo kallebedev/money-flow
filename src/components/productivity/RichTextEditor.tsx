@@ -195,29 +195,6 @@ export function RichTextEditor({ content, onChange, placeholder = 'Comece a escr
     <div className={cn('space-y-0', className)}>
       {toolbar}
 
-      {/* Bubble menu for quick formatting on selection */}
-      {editor && (
-        <BubbleMenu editor={editor} tippyOptions={{ duration: 150 }} className="flex items-center gap-0.5 p-1 rounded-lg bg-popover border border-border shadow-lg">
-          <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')} title="Negrito">
-            <Bold className="w-3.5 h-3.5" />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')} title="Itálico">
-            <Italic className="w-3.5 h-3.5" />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive('underline')} title="Sublinhado">
-            <UnderlineIcon className="w-3.5 h-3.5" />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive('strike')} title="Riscado">
-            <Strikethrough className="w-3.5 h-3.5" />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleHighlight().run()} active={editor.isActive('highlight')} title="Destaque">
-            <Highlighter className="w-3.5 h-3.5" />
-          </ToolbarButton>
-          <ToolbarButton onClick={addLink} active={editor.isActive('link')} title="Link">
-            <Link2 className="w-3.5 h-3.5" />
-          </ToolbarButton>
-        </BubbleMenu>
-      )}
 
       <div className="rounded-xl bg-card/50 border border-border overflow-hidden">
         <EditorContent editor={editor} />
