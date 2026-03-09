@@ -130,11 +130,7 @@ export function AIChatbot() {
                   {quickActions.map((action, i) => (
                     <button
                       key={i}
-                      onClick={() => {
-                        setInput(action.prompt);
-                        setTimeout(() => sendMessage(), 100);
-                        setInput(action.prompt);
-                      }}
+                      onClick={() => sendQuickAction(action.prompt)}
                       className="p-3 text-left text-[11px] font-medium bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.04] rounded-xl transition-all text-muted-foreground hover:text-foreground"
                     >
                       {action.label}
