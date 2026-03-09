@@ -46,8 +46,8 @@ export async function getAIAdvisorNote(stats: Record<string, unknown>, completed
 
 export async function generateBudgetAdvice(
   salary: number,
-  profile: Record<string, unknown>,
-  categories: Array<Record<string, unknown>>,
+  profile: unknown,
+  categories: unknown[],
 ): Promise<AIBudgetAdvice> {
   return await postJSON<AIBudgetAdvice>("/ai/finance/budget-advice", { salary, profile, categories });
 }
@@ -60,8 +60,8 @@ export async function generateFinancialPlan(
 }
 
 export async function analyzeFinanceHealth(
-  transactions: Array<Record<string, unknown>>,
-  categories: Array<Record<string, unknown>>,
+  transactions: unknown[],
+  categories: unknown[],
   salary: number,
 ): Promise<AIFinanceHealth> {
   return await postJSON<AIFinanceHealth>("/ai/finance/health", { transactions, categories, salary });
