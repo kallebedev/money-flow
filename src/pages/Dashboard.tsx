@@ -724,6 +724,9 @@ export default function Dashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* AI Forecast */}
+      <AIForecast />
     </div>
   );
 }
