@@ -91,7 +91,7 @@ export function RichTextEditor({ content, onChange, placeholder = 'Comece a escr
   // Sync external content changes (e.g. switching documents)
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content, false);
+      editor.commands.setContent(content);
     }
   }, [content, editor]);
 
