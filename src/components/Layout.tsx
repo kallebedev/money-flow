@@ -1,5 +1,6 @@
 import React from "react";
 import TopNav from "@/components/TopNav";
+import { AIChatbot } from "@/components/AIChatbot";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -8,6 +9,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 w-full max-w-[1400px] mx-auto px-6 md:px-10 lg:px-12 py-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
         {children}
       </main>
+      <AIChatbot />
     </div>
   );
 }
