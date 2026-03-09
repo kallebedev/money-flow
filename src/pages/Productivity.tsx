@@ -100,9 +100,6 @@ export default function Productivity() {
                     <StrategicView />
                 </TabsContent>
 
-                <TabsContent value="daily-goals" className="animate-in fade-in duration-500">
-                    <DailyGoalsView />
-                </TabsContent>
 
                 <TabsContent value="tactical" className="space-y-8 animate-in fade-in duration-500">
                     <div className="grid lg:grid-cols-3 gap-8">
