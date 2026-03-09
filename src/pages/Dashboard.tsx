@@ -31,6 +31,7 @@ import { TransactionType } from "@/lib/types";
 import { toast } from "sonner";
 import { useNavigate, Link } from "react-router-dom";
 import { SpendingAnalysis } from "@/components/SpendingAnalysis";
+import { AIForecast } from "@/components/AIForecast";
 import { useSpendingAnalysis } from "@/hooks/useSpendingAnalysis";
 import { useAIBudgetAdvisor } from "@/hooks/useAIBudgetAdvisor";
 import { useAuth } from "@/contexts/AuthContext";
@@ -723,6 +724,9 @@ export default function Dashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* AI Forecast */}
+      <AIForecast />
     </div>
   );
 }

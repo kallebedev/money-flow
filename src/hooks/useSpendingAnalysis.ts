@@ -1,9 +1,8 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useFinanceData } from "./useFinanceData";
 import { Transaction } from "@/lib/types";
 import { useAuth } from "@/contexts/AuthContext";
-import { analyzeFinanceHealth } from "../lib/aiClient";
-import { AIFinanceHealth } from "../lib/openai";
+import { analyzeSpendingAI } from "@/lib/openaiService";
 
 export interface SpendingInsight {
     categoryId: string;
@@ -25,13 +24,20 @@ export function useSpendingAnalysis(transactionsOverride?: Transaction[]) {
     const emergencyFundMonths = user?.user_metadata?.emergencyFundMonths ?? 6;
     const maxDebtRatio = user?.user_metadata?.maxDebtRatio ?? 0.3;
 
-    const [aiHealth, setAiHealth] = useState<AIFinanceHealth | null>(null);
+    const [aiHealth, setAiHealth] = useState<{ score: number; status: string; advice: string; breakdown: Record<string, number> } | null>(null);
     const [isAILoading, setIsAILoading] = useState(false);
 
     const triggerAIAnalysis = async () => {
         setIsAILoading(true);
         try {
-            const result = await analyzeFinanceHealth(transactions, categories, monthlySalary);
+            const result = await analyzeSpendingAI(
+                transactions.map(t => ({
+                    ...t,
+                    categoryName: categories.find(c => c.id === t.category)?.name || t.category
+                })),
+                categories,
+                monthlySalary
+            );
             setAiHealth(result);
         } catch (err) {
             console.error("AI Health Error:", err);

@@ -45,7 +45,7 @@ export default function SpendingAnalysisPage() {
     }, [transactions, range, startDate, endDate]);
 
     const { insights, healthScore, healthAdvice, healthStatus, healthBreakdown, unusualIncreases } = useSpendingAnalysis(filteredTransactions);
-    const advisor = useAIBudgetAdvisor();
+    const { advisor } = useAIBudgetAdvisor();
 
     // Data for Distribution Chart
     const pieData = insights
