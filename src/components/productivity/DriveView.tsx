@@ -3,7 +3,6 @@ import { DocItem, Goal } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import {
     Folder, FileText, Plus, Search, Trash2, Pencil,
     Save, ArrowLeft, ChevronRight, HardDrive, Filter
@@ -11,6 +10,7 @@ import {
 import { useProductivity } from '@/hooks/useProductivity';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { RichTextEditor } from './RichTextEditor';
 
 export const DriveView: React.FC = () => {
     const { goals, updateGoal } = useProductivity();
@@ -190,12 +190,11 @@ export const DriveView: React.FC = () => {
                         <Button variant="ghost" onClick={() => setActiveFileId(null)} className="h-8 -ml-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-[#f0f0f0]">
                             <ArrowLeft className="w-4 h-4 mr-2" /> Voltar ao Drive
                         </Button>
-                        <div className="bg-white/[0.01] border border-white/[0.05] rounded-[32px] p-8 shadow-inner">
-                            <Textarea
-                                value={noteDraft}
-                                onChange={(e) => setNoteDraft(e.target.value)}
-                                placeholder="Comece a escrever seus documentos..."
-                                className="min-h-[400px] bg-transparent border-none text-base focus-visible:ring-0 resize-none p-0 text-white/80 leading-relaxed"
+                        <div className="bg-card/20 border border-border rounded-2xl p-6">
+                            <RichTextEditor
+                                content={noteDraft}
+                                onChange={setNoteDraft}
+                                placeholder="Comece a escrever seu documento..."
                             />
                         </div>
                     </div>

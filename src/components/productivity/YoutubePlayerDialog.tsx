@@ -12,8 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { ObsidianDocEditor } from './ObsidianDocEditor';
-import type { DocItemForEditor } from './ObsidianDocEditor';
+import { RichTextEditor } from './RichTextEditor';
 
 interface YoutubePlayerDialogProps {
     goal: Goal | null;
@@ -327,38 +326,17 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
                                     <Button variant="ghost" size="sm" onClick={() => setActiveFileId(null)} className="h-7 text-[9px] font-black uppercase tracking-widest gap-2 -ml-2">
                                         <ArrowLeft className="w-3 h-3" /> Arquivos
                                     </Button>
-                                    <ObsidianDocEditor
-                                        value={noteDraft}
+                                    <RichTextEditor
+                                        content={noteDraft}
                                         onChange={setNoteDraft}
-                                        onSave={handleSaveLocalFile}
-                                        onOpenWikiLink={(docId) => {
-                                            const doc = localFileSystem.find((i) => i.id === docId);
-                                            if (doc && doc.type === 'file') {
-                                                setActiveFileId(doc.id);
-                                                setNoteDraft(doc.content || '');
-                                            }
-                                        }}
-                                        onRequestCreateDoc={(docName) => {
-                                            const newItem: DocItem = {
-                                                id: Math.random().toString(36).substr(2, 9),
-                                                name: docName.trim() || 'Nota de Estudo',
-                                                type: 'file',
-                                                content: '',
-                                                parentId: currentFolderId,
-                                                createdAt: Date.now(),
-                                            };
-                                            const updated = [...localFileSystem, newItem];
-                                            setLocalFileSystem(updated);
-                                            if (onSaveNotes) onSaveNotes(updated);
-                                            setActiveFileId(newItem.id);
-                                            setNoteDraft('');
-                                            toast.success(`Documento "${newItem.name}" criado.`);
-                                        }}
-                                        allItems={localFileSystem as unknown as DocItemForEditor[]}
-                                        currentDocName={localFileSystem.find((i) => i.id === activeFileId)?.name ?? ''}
-                                        currentDocId={activeFileId}
-                                        placeholder="Tome nota de algo importante... Use os botões para negrito, itálico, título, listas e links entre documentos."
+                                        placeholder="Tome nota de algo importante..."
                                     />
+                                    <div className="mt-3 flex items-center gap-3">
+                                        <Button onClick={handleSaveLocalFile} className="h-8 px-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-[9px] font-black uppercase tracking-widest gap-2">
+                                            <Save className="w-3 h-3" />
+                                            Salvar
+                                        </Button>
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 gap-2">

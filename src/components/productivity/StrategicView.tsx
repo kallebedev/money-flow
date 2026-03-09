@@ -14,7 +14,7 @@ import { useProductivity } from '@/hooks/useProductivity';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { YoutubePlayerDialog } from './YoutubePlayerDialog';
-import { ObsidianDocEditor } from './ObsidianDocEditor';
+import { RichTextEditor } from './RichTextEditor';
 import {
     Dialog,
     DialogContent,
@@ -635,32 +635,17 @@ const StrategicView: React.FC = () => {
                                     <Button variant="ghost" size="sm" onClick={() => setActiveFileId(null)} className="h-8 -ml-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground">
                                         <ArrowLeft className="w-3.5 h-3.5 mr-2" /> Voltar
                                     </Button>
-                                    <ObsidianDocEditor
-                                        value={noteDraft}
+                                    <RichTextEditor
+                                        content={noteDraft}
                                         onChange={setNoteDraft}
-                                        onSave={handleSaveFileContent}
-                                        onOpenWikiLink={openDocFile}
-                                        onRequestCreateDoc={(docName) => {
-                                            const newItem: DocItem = {
-                                                id: Math.random().toString(36).substr(2, 9),
-                                                name: docName.trim() || 'Novo Documento',
-                                                type: 'file',
-                                                content: '',
-                                                parentId: currentFolderId,
-                                                createdAt: Date.now(),
-                                            };
-                                            const updated = [...fileSystem, newItem];
-                                            setFileSystem(updated);
-                                            persistFileSystem(updated);
-                                            setActiveFileId(newItem.id);
-                                            setNoteDraft('');
-                                            toast.success(`Documento "${newItem.name}" criado.`);
-                                        }}
-                                        allItems={fileSystem}
-                                        currentDocName={fileSystem.find((i) => i.id === activeFileId)?.name ?? ''}
-                                        currentDocId={activeFileId}
-                                        placeholder="Digite aqui... Ctrl+B negrito, Ctrl+I itálico. Use [[nome]] para links entre docs."
+                                        placeholder="Comece a escrever..."
                                     />
+                                    <div className="mt-4 flex items-center gap-3">
+                                        <Button onClick={handleSaveFileContent} className="h-9 px-6 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-[10px] font-black uppercase tracking-widest gap-2">
+                                            <Save className="w-3.5 h-3.5" />
+                                            Salvar
+                                        </Button>
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
