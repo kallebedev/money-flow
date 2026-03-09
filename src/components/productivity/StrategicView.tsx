@@ -246,12 +246,28 @@ const StrategicView: React.FC = () => {
             setActiveFileId(newItem.id);
             setNoteDraft('');
         }
+        toast.success(type === 'file' ? 'Documento criado!' : 'Pasta criada!');
     };
 
+    // Recursive delete that properly handles nested folders
     const handleDeleteItem = (id: string) => {
-        const updated = fileSystem.filter(item => item.id !== id && item.parentId !== id);
+        const getIdsToDelete = (parentId: string): string[] => {
+            const children = fileSystem.filter(i => i.parentId === parentId);
+            let ids = [parentId];
+            children.forEach(c => {
+                if (c.type === 'folder') ids = [...ids, ...getIdsToDelete(c.id)];
+                else ids.push(c.id);
+            });
+            return ids;
+        };
+        const idsToDelete = new Set(getIdsToDelete(id));
+        const updated = fileSystem.filter(item => !idsToDelete.has(item.id));
         setFileSystem(updated);
         persistFileSystem(updated);
+        if (activeFileId && idsToDelete.has(activeFileId)) {
+            setActiveFileId(null);
+        }
+        toast.success('Item removido!');
     };
 
     const handleSaveFileContent = () => {
@@ -261,7 +277,7 @@ const StrategicView: React.FC = () => {
         );
         setFileSystem(updated);
         persistFileSystem(updated);
-        toast.success('Documento salvo no Drive!');
+        toast.success('Documento salvo!');
     };
 
     const handleRenameDoc = (id: string) => {
@@ -272,14 +288,21 @@ const StrategicView: React.FC = () => {
         setFileSystem(updated);
         persistFileSystem(updated);
         setEditingDocId(null);
-        toast.success('Renomeado com sucesso');
+        toast.success('Renomeado!');
     };
 
-    const filteredDocItems = fileSystem.filter(item => {
-        const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesFolder = item.parentId === (searchTerm ? item.parentId : currentFolderId);
-        return searchTerm ? matchesSearch : matchesFolder;
-    });
+    const openDocFile = (docId: string) => {
+        const doc = fileSystem.find(i => i.id === docId);
+        if (doc && doc.type === 'file') {
+            setActiveFileId(doc.id);
+            setNoteDraft(doc.content || '');
+        }
+    };
+
+    // Fixed filtering: search globally or show current folder items
+    const displayedItems = searchTerm.trim()
+        ? fileSystem.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()))
+        : fileSystem.filter(item => item.parentId === currentFolderId);
 
     const breadcrumbs = [];
     let tempId = currentFolderId;
