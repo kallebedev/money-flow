@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
-import { ProductivityTask, Goal, Project, PersonalLog } from '@/lib/types';
+import { ProductivityTask, Goal, Project, PersonalLog, parseTaskMeta, stringifyTaskMeta } from '@/lib/types';
 import { rescheduleFollowingTasks } from '@/lib/productivity/Rescheduler';
 import { useProductivityStats } from './useProductivityStats';
 import { formatISO, format } from 'date-fns';
