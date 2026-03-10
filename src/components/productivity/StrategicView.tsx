@@ -222,7 +222,7 @@ const StrategicView: React.FC = () => {
                                     </Badge>
                                 )}
                                 {goal.youtubeLink && (
-                                    <Badge variant="outline" className="text-[9px] border-none bg-red-500/10 text-red-500 px-1 py-0 h-4 cursor-pointer" onClick={() => setActiveVideoGoal(goal)}>
+                                    <Badge variant="outline" className="text-[9px] border-none bg-red-500/10 text-red-500 px-1 py-0 h-4 cursor-pointer hover:bg-red-500/20 transition-colors" onClick={() => setActiveVideoGoal(goal)} title="Clique para abrir o player">
                                         <Play className="w-2.5 h-2.5 mr-0.5" /> Vídeo
                                     </Badge>
                                 )}

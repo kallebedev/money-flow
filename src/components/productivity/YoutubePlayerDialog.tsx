@@ -60,9 +60,18 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
 
     useEffect(() => {
         if (isOpen) {
-            setLocalFileSystem(docItems);
+            // Initialize file system from docItems (from goal notes)
+            if (docItems && docItems.length > 0) {
+                setLocalFileSystem(docItems);
+            } else {
+                setLocalFileSystem([]);
+            }
             setPlaylistVideos([]);
             setCurrentVideoIndex(0);
+            setCurrentFolderId(null);
+            setActiveFileId(null);
+            setNoteDraft('');
+            setSearchTerm('');
         }
     }, [docItems, isOpen]);
 
@@ -216,19 +225,22 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
         toast.success('Item removido');
     };
 
-    const handleRenameLocalDoc = (id: string) => {
-        if (!editNameValue.trim()) return;
-        const updated = localFileSystem.map(item => item.id === id ? { ...item, name: editNameValue.trim() } : item);
+    const handleRenameLocalDoc = (id: string, newName?: string) => {
+        const name = newName || editNameValue.trim();
+        if (!name) return;
+        const updated = localFileSystem.map(item => item.id === id ? { ...item, name } : item);
         setLocalFileSystem(updated);
         if (onSaveNotes) onSaveNotes(updated);
         setEditingDocId(null);
         toast.success('Renomeado com sucesso');
     };
 
-    const filteredDocItems = localFileSystem.filter(item => {
-        if (searchTerm) return item.name.toLowerCase().includes(searchTerm.toLowerCase());
-        return item.parentId === currentFolderId;
-    });
+    const filteredDocItems = (() => {
+        if (searchTerm) {
+            return localFileSystem.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
+        }
+        return localFileSystem.filter(item => item.parentId === currentFolderId);
+    })();
 
     const breadcrumbs: DocItem[] = [];
     let tempId = currentFolderId;
@@ -239,7 +251,22 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
 
     const completedCount = playlistVideos.filter(v => v.status === 'completed').length;
 
-    if (!goal || !goal.youtubeLink) return null;
+    if (!goal || !goal.youtubeLink) {
+        if (isOpen) {
+            return (
+                <Dialog open={isOpen} onOpenChange={onClose}>
+                    <DialogContent className="sm:max-w-[600px] bg-[#0a0a0a] border-white/[0.05]">
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                            <Youtube className="w-12 h-12 text-red-500/40 mb-4" />
+                            <p className="text-sm font-bold text-muted-foreground">Nenhum vídeo ou playlist vinculado</p>
+                            <p className="text-xs text-muted-foreground/60 mt-2">Adicione um link do YouTube para esta meta estratégica</p>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            );
+        }
+        return null;
+    }
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => {
