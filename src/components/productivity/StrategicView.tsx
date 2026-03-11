@@ -435,10 +435,11 @@ const StrategicView: React.FC = () => {
             </div>
 
             <YoutubePlayerDialog
-                goal={activeVideoGoal} isOpen={!!activeVideoGoal} onClose={() => setActiveVideoGoal(null)}
-                docItems={(() => { try { const notes = activeVideoGoal?.notes; if (notes && notes.startsWith('{')) return JSON.parse(notes).items || []; return notes ? [{ id: 'root-doc', name: 'Anotações', type: 'file', content: notes, parentId: null, createdAt: 0 }] : []; } catch { return []; } })()}
+                goal={activeVideoGoal ? (goals.find(g => g.id === activeVideoGoal.id) || activeVideoGoal) : null}
+                isOpen={!!activeVideoGoal} onClose={() => setActiveVideoGoal(null)}
+                docItems={(() => { try { const g = activeVideoGoal ? (goals.find(gx => gx.id === activeVideoGoal.id) || activeVideoGoal) : null; const notes = g?.notes; if (notes && notes.startsWith('{')) return JSON.parse(notes).items || []; return notes ? [{ id: 'root-doc', name: 'Anotações', type: 'file', content: notes, parentId: null, createdAt: 0 }] : []; } catch { return []; } })()}
                 onSaveProgress={handleSaveProgress} onLiveProgress={handleLiveProgressUpdate}
-                onSaveNotes={(items) => { if (activeVideoGoal) updateGoal(activeVideoGoal.id, { notes: mergeItemsIntoGoalNotes(activeVideoGoal, items) }); }}
+                onSaveNotes={(items) => { if (activeVideoGoal) { const fresh = goals.find(g => g.id === activeVideoGoal.id) || activeVideoGoal; updateGoal(fresh.id, { notes: mergeItemsIntoGoalNotes(fresh, items) }); } }}
             />
 
             {/* Doc Dialog - z-index fix */}
