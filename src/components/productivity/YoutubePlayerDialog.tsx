@@ -58,22 +58,33 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
     const [editNameValue, setEditNameValue] = useState('');
     const [videoError, setVideoError] = useState<string | null>(null);
 
+    // Track the goal ID to reset state only when a different goal opens
+    const prevGoalIdRef = useRef<string | null>(null);
+
     useEffect(() => {
-        if (isOpen) {
-            // Initialize file system from docItems (from goal notes)
-            if (docItems && docItems.length > 0) {
-                setLocalFileSystem(docItems);
-            } else {
-                setLocalFileSystem([]);
+        if (isOpen && goal) {
+            const goalChanged = prevGoalIdRef.current !== goal.id;
+            prevGoalIdRef.current = goal.id;
+
+            if (goalChanged) {
+                // Only reset when opening a different goal
+                if (docItems && docItems.length > 0) {
+                    setLocalFileSystem(docItems);
+                } else {
+                    setLocalFileSystem([]);
+                }
+                setPlaylistVideos([]);
+                setCurrentVideoIndex(0);
+                setCurrentFolderId(null);
+                setActiveFileId(null);
+                setNoteDraft('');
+                setSearchTerm('');
+                setVideoError(null);
             }
-            setPlaylistVideos([]);
-            setCurrentVideoIndex(0);
-            setCurrentFolderId(null);
-            setActiveFileId(null);
-            setNoteDraft('');
-            setSearchTerm('');
+        } else if (!isOpen) {
+            prevGoalIdRef.current = null;
         }
-    }, [docItems, isOpen]);
+    }, [isOpen, goal?.id]);
 
     // URL processing
     const extractUrl = (text: string) => {
