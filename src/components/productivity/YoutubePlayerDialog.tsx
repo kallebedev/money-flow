@@ -80,6 +80,8 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
                 setPlaylistVideos([]);
                 setCurrentVideoIndex(0);
                 setShowPlaylist(true);
+                setIsPlaylistLoading(false);
+                setPlaylistLoadError(null);
                 setCurrentFolderId(null);
                 setActiveFileId(null);
                 setNoteDraft('');
