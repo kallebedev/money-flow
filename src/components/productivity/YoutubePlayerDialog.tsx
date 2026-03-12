@@ -96,6 +96,8 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
             }
         } else if (!isOpen) {
             prevGoalIdRef.current = null;
+            setIsPlaylistLoading(false);
+            setPlaylistLoadError(null);
             playlistBootstrapAttemptsRef.current = 0;
             if (playlistBootstrapTimerRef.current) {
                 clearTimeout(playlistBootstrapTimerRef.current);
