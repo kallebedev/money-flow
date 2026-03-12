@@ -314,6 +314,12 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
     }, [isPlaylist, startPlaylistBootstrap]);
 
     useEffect(() => {
+        if (isOpen && isPlaylist && playlistVideos.length === 0 && !isPlaylistLoading) {
+            startPlaylistBootstrap();
+        }
+    }, [isOpen, isPlaylist, playlistVideos.length, isPlaylistLoading, startPlaylistBootstrap]);
+
+    useEffect(() => {
         return () => {
             if (saveIntervalRef.current) {
                 clearInterval(saveIntervalRef.current);
