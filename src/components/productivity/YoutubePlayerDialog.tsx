@@ -37,6 +37,9 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
     const lastKnownProgressRef = useRef(0);
     const lastKnownTimestampRef = useRef(0);
     const saveIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const playlistBootstrapTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const playlistBootstrapAttemptsRef = useRef(0);
+    const fetchedVideoTitlesRef = useRef<Set<string>>(new Set());
 
     // Playlist state
     const [playlistVideos, setPlaylistVideos] = useState<PlaylistVideo[]>([]);
@@ -67,7 +70,6 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
             prevGoalIdRef.current = goal.id;
 
             if (goalChanged) {
-                // Only reset when opening a different goal
                 if (docItems && docItems.length > 0) {
                     setLocalFileSystem(docItems);
                 } else {
@@ -75,16 +77,28 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
                 }
                 setPlaylistVideos([]);
                 setCurrentVideoIndex(0);
+                setShowPlaylist(true);
                 setCurrentFolderId(null);
                 setActiveFileId(null);
                 setNoteDraft('');
                 setSearchTerm('');
                 setVideoError(null);
+                fetchedVideoTitlesRef.current.clear();
+                playlistBootstrapAttemptsRef.current = 0;
+                if (playlistBootstrapTimerRef.current) {
+                    clearTimeout(playlistBootstrapTimerRef.current);
+                    playlistBootstrapTimerRef.current = null;
+                }
             }
         } else if (!isOpen) {
             prevGoalIdRef.current = null;
+            playlistBootstrapAttemptsRef.current = 0;
+            if (playlistBootstrapTimerRef.current) {
+                clearTimeout(playlistBootstrapTimerRef.current);
+                playlistBootstrapTimerRef.current = null;
+            }
         }
-    }, [isOpen, goal?.id]);
+    }, [isOpen, goal?.id, docItems]);
 
     // URL processing
     const extractUrl = (text: string) => {
@@ -105,6 +119,77 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
 
     const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
     const isPlaylist = cleanUrl.includes('list=');
+
+    const fetchVideoTitle = useCallback((videoId: string) => {
+        if (fetchedVideoTitlesRef.current.has(videoId)) return;
+        fetchedVideoTitlesRef.current.add(videoId);
+
+        fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data?.title) {
+                    setPlaylistVideos(prev => prev.map(v => v.videoId === videoId ? { ...v, title: data.title } : v));
+                }
+            })
+            .catch(() => { });
+    }, []);
+
+    const hydratePlaylistFromPlayer = useCallback(() => {
+        if (!isPlaylist) return false;
+
+        try {
+            const internal = playerRef.current?.getInternalPlayer();
+            const videoIds: string[] = internal?.getPlaylist?.() || [];
+            if (videoIds.length === 0) return false;
+
+            setShowPlaylist(true);
+            setPlaylistVideos(prev => {
+                const prevById = new Map(prev.map(v => [v.videoId, v]));
+                return videoIds.map((videoId, index) => {
+                    const previous = prevById.get(videoId);
+                    if (!previous) fetchVideoTitle(videoId);
+
+                    return {
+                        videoId,
+                        title: previous?.title || `Vídeo ${index + 1}`,
+                        index,
+                        watchedPercent: previous?.watchedPercent ?? 0,
+                        status: previous?.status ?? 'not-started',
+                    } as PlaylistVideo;
+                });
+            });
+
+            const idx = internal?.getPlaylistIndex?.();
+            if (typeof idx === 'number' && idx >= 0) {
+                setCurrentVideoIndex(idx);
+            }
+
+            return true;
+        } catch {
+            return false;
+        }
+    }, [fetchVideoTitle, isPlaylist]);
+
+    const startPlaylistBootstrap = useCallback(() => {
+        if (!isPlaylist) return;
+
+        if (playlistBootstrapTimerRef.current) {
+            clearTimeout(playlistBootstrapTimerRef.current);
+            playlistBootstrapTimerRef.current = null;
+        }
+
+        playlistBootstrapAttemptsRef.current = 0;
+
+        const run = () => {
+            const loaded = hydratePlaylistFromPlayer();
+            if (loaded || playlistBootstrapAttemptsRef.current >= 8) return;
+
+            playlistBootstrapAttemptsRef.current += 1;
+            playlistBootstrapTimerRef.current = setTimeout(run, 600);
+        };
+
+        run();
+    }, [hydratePlaylistFromPlayer, isPlaylist]);
 
     // Progress handlers
     const saveCurrentProgress = useCallback(() => {
@@ -134,6 +219,11 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
         if (lastKnownProgress !== globalProgress) setLastKnownProgress(globalProgress);
         if (onLiveProgress && goal) onLiveProgress(goal.id, globalProgress);
 
+        if (isPlaylist && playlistVideos.length === 0) {
+            hydratePlaylistFromPlayer();
+            return;
+        }
+
         // Update playlist video progress
         if (isPlaylist && playlistVideos.length > 0) {
             try {
@@ -151,13 +241,16 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
                 }));
             } catch { }
         }
-    }, [goal, onLiveProgress, lastKnownProgress, isPlaylist, currentVideoIndex, playlistVideos.length]);
+    }, [goal, onLiveProgress, lastKnownProgress, isPlaylist, currentVideoIndex, playlistVideos.length, hydratePlaylistFromPlayer]);
 
     const handlePlay = useCallback(() => {
         setIsPlaying(true);
+        if (isPlaylist && playlistVideos.length === 0) {
+            startPlaylistBootstrap();
+        }
         if (saveIntervalRef.current) clearInterval(saveIntervalRef.current);
         saveIntervalRef.current = setInterval(() => saveCurrentProgress(), 5000);
-    }, [saveCurrentProgress]);
+    }, [isPlaylist, playlistVideos.length, saveCurrentProgress, startPlaylistBootstrap]);
 
     const handlePauseOrEnd = useCallback(() => {
         setIsPlaying(false);
@@ -168,25 +261,21 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
 
     const handleReady = useCallback(() => {
         if (!isPlaylist) return;
-        try {
-            const internal = playerRef.current?.getInternalPlayer();
-            const videoIds: string[] = internal?.getPlaylist?.() || [];
-            if (videoIds.length > 0) {
-                setPlaylistVideos(videoIds.map((vid, idx) => ({
-                    videoId: vid, title: `Vídeo ${idx + 1}`, index: idx, watchedPercent: 0, status: 'not-started' as const,
-                })));
-                videoIds.forEach((vid, idx) => {
-                    fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${vid}`)
-                        .then(r => r.json())
-                        .then(data => {
-                            if (data.title) {
-                                setPlaylistVideos(prev => prev.map((v, i) => i === idx ? { ...v, title: data.title } : v));
-                            }
-                        }).catch(() => { });
-                });
+        startPlaylistBootstrap();
+    }, [isPlaylist, startPlaylistBootstrap]);
+
+    useEffect(() => {
+        return () => {
+            if (saveIntervalRef.current) {
+                clearInterval(saveIntervalRef.current);
+                saveIntervalRef.current = null;
             }
-        } catch (e) { console.error(e); }
-    }, [isPlaylist]);
+            if (playlistBootstrapTimerRef.current) {
+                clearTimeout(playlistBootstrapTimerRef.current);
+                playlistBootstrapTimerRef.current = null;
+            }
+        };
+    }, []);
 
     const playVideoAt = (idx: number) => {
         try {
@@ -291,10 +380,10 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
                 "p-0 overflow-hidden bg-[#0a0a0a] border-white/[0.05] shadow-2xl transition-all duration-500 rounded-[32px] z-[50]",
                 isFullScreen ? "sm:max-w-[95vw] h-[90vh]" : isPlaylist && playlistVideos.length > 0 ? "sm:max-w-[1400px] h-[80vh]" : "sm:max-w-[1200px] h-[80vh]"
             )}>
-                <div className="flex h-full flex-col lg:flex-row divide-x divide-white/[0.05]">
+                <div className="flex h-full flex-col md:flex-row md:divide-x divide-y md:divide-y-0 divide-white/[0.05] overflow-y-auto md:overflow-hidden">
                     {/* Left: Video Player */}
-                    <div className={cn("flex-1 bg-[#050505] flex flex-col relative min-h-[300px]",
-                        isPlaylist && playlistVideos.length > 0 ? "lg:flex-[5]" : "lg:flex-[7]"
+                    <div className={cn("flex-1 bg-[#050505] flex flex-col relative min-h-[260px] md:min-h-0",
+                        isPlaylist && playlistVideos.length > 0 ? "md:flex-[5]" : "md:flex-[7]"
                     )}>
                         <div className="flex-1 relative group bg-black">
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
@@ -367,7 +456,7 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
 
                     {/* Playlist Sidebar */}
                     {isPlaylist && playlistVideos.length > 0 && showPlaylist && (
-                        <div className="lg:flex-[2] flex flex-col h-full bg-[#080808] overflow-hidden min-w-0">
+                        <div className="md:flex-[2] flex flex-col bg-[#080808] overflow-hidden min-w-0 h-[220px] md:h-full md:min-h-0">
                             <div className="p-3 border-b border-white/[0.05] flex items-center justify-between shrink-0">
                                 <div className="flex items-center gap-2">
                                     <List className="w-3.5 h-3.5 text-red-500" />
@@ -403,8 +492,8 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
                     )}
 
                     {/* Right: Study Docs */}
-                    <div className={cn("flex-1 bg-[#0a0a0a] flex flex-col h-full overflow-hidden relative z-10",
-                        isPlaylist && playlistVideos.length > 0 ? "lg:flex-[3]" : "lg:flex-[5]"
+                    <div className={cn("flex-1 bg-[#0a0a0a] flex flex-col min-h-[300px] md:min-h-0 overflow-hidden relative z-10",
+                        isPlaylist && playlistVideos.length > 0 ? "md:flex-[3]" : "md:flex-[5]"
                     )}>
                         <div className="p-4 border-b border-white/[0.05] bg-white/[0.01] flex items-center justify-between shrink-0">
                             <div className="flex flex-col min-w-0">
