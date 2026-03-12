@@ -214,13 +214,25 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
         }
 
         playlistBootstrapAttemptsRef.current = 0;
+        setIsPlaylistLoading(true);
+        setPlaylistLoadError(null);
 
         const run = () => {
             const loaded = hydratePlaylistFromPlayer();
-            if (loaded || playlistBootstrapAttemptsRef.current >= 8) return;
+            if (loaded) {
+                setIsPlaylistLoading(false);
+                setPlaylistLoadError(null);
+                return;
+            }
+
+            if (playlistBootstrapAttemptsRef.current >= 10) {
+                setIsPlaylistLoading(false);
+                setPlaylistLoadError('Não foi possível carregar a playlist automaticamente.');
+                return;
+            }
 
             playlistBootstrapAttemptsRef.current += 1;
-            playlistBootstrapTimerRef.current = setTimeout(run, 600);
+            playlistBootstrapTimerRef.current = setTimeout(run, 700);
         };
 
         run();
