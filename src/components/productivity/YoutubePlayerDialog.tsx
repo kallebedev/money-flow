@@ -45,6 +45,8 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
     const [playlistVideos, setPlaylistVideos] = useState<PlaylistVideo[]>([]);
     const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
     const [showPlaylist, setShowPlaylist] = useState(true);
+    const [isPlaylistLoading, setIsPlaylistLoading] = useState(false);
+    const [playlistLoadError, setPlaylistLoadError] = useState<string | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
 
     // Focus tracking
@@ -78,6 +80,8 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
                 setPlaylistVideos([]);
                 setCurrentVideoIndex(0);
                 setShowPlaylist(true);
+                setIsPlaylistLoading(false);
+                setPlaylistLoadError(null);
                 setCurrentFolderId(null);
                 setActiveFileId(null);
                 setNoteDraft('');
@@ -92,6 +96,8 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
             }
         } else if (!isOpen) {
             prevGoalIdRef.current = null;
+            setIsPlaylistLoading(false);
+            setPlaylistLoadError(null);
             playlistBootstrapAttemptsRef.current = 0;
             if (playlistBootstrapTimerRef.current) {
                 clearTimeout(playlistBootstrapTimerRef.current);
@@ -117,8 +123,37 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
         return extracted;
     })();
 
+    const getYouTubeParam = (url: string, key: string) => {
+        try {
+            return new URL(url).searchParams.get(key) || '';
+        } catch {
+            return '';
+        }
+    };
+
+    const extractYoutubeVideoId = (url: string) => {
+        try {
+            const parsed = new URL(url);
+            if (parsed.hostname.includes('youtu.be')) {
+                return parsed.pathname.replace('/', '').trim();
+            }
+            return parsed.searchParams.get('v') || '';
+        } catch {
+            return '';
+        }
+    };
+
+    const playlistId = getYouTubeParam(cleanUrl, 'list');
+    const primaryVideoId = extractYoutubeVideoId(cleanUrl);
     const isYouTube = cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be');
-    const isPlaylist = cleanUrl.includes('list=');
+    const isPlaylist = Boolean(playlistId);
+    const hasPlaylistSidebar = isPlaylist && showPlaylist;
+
+    const playerUrl = (() => {
+        if (!isPlaylist) return cleanUrl;
+        if (primaryVideoId) return `https://www.youtube.com/watch?v=${primaryVideoId}`;
+        return `https://www.youtube.com/embed/videoseries?list=${playlistId}`;
+    })();
 
     const fetchVideoTitle = useCallback((videoId: string) => {
         if (fetchedVideoTitlesRef.current.has(videoId)) return;
@@ -163,6 +198,8 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
             if (typeof idx === 'number' && idx >= 0) {
                 setCurrentVideoIndex(idx);
             }
+            setIsPlaylistLoading(false);
+            setPlaylistLoadError(null);
 
             return true;
         } catch {
@@ -179,13 +216,25 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
         }
 
         playlistBootstrapAttemptsRef.current = 0;
+        setIsPlaylistLoading(true);
+        setPlaylistLoadError(null);
 
         const run = () => {
             const loaded = hydratePlaylistFromPlayer();
-            if (loaded || playlistBootstrapAttemptsRef.current >= 8) return;
+            if (loaded) {
+                setIsPlaylistLoading(false);
+                setPlaylistLoadError(null);
+                return;
+            }
+
+            if (playlistBootstrapAttemptsRef.current >= 10) {
+                setIsPlaylistLoading(false);
+                setPlaylistLoadError('Não foi possível carregar a playlist automaticamente.');
+                return;
+            }
 
             playlistBootstrapAttemptsRef.current += 1;
-            playlistBootstrapTimerRef.current = setTimeout(run, 600);
+            playlistBootstrapTimerRef.current = setTimeout(run, 700);
         };
 
         run();
@@ -263,6 +312,12 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
         if (!isPlaylist) return;
         startPlaylistBootstrap();
     }, [isPlaylist, startPlaylistBootstrap]);
+
+    useEffect(() => {
+        if (isOpen && isPlaylist && playlistVideos.length === 0 && !isPlaylistLoading) {
+            startPlaylistBootstrap();
+        }
+    }, [isOpen, isPlaylist, playlistVideos.length, isPlaylistLoading, startPlaylistBootstrap]);
 
     useEffect(() => {
         return () => {
@@ -378,12 +433,12 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
         }}>
             <DialogContent className={cn(
                 "p-0 overflow-hidden bg-[#0a0a0a] border-white/[0.05] shadow-2xl transition-all duration-500 rounded-[32px] z-[50]",
-                isFullScreen ? "sm:max-w-[95vw] h-[90vh]" : isPlaylist && playlistVideos.length > 0 ? "sm:max-w-[1400px] h-[80vh]" : "sm:max-w-[1200px] h-[80vh]"
+                isFullScreen ? "sm:max-w-[95vw] h-[90vh]" : hasPlaylistSidebar ? "sm:max-w-[1400px] h-[80vh]" : "sm:max-w-[1200px] h-[80vh]"
             )}>
                 <div className="flex h-full flex-col md:flex-row md:divide-x divide-y md:divide-y-0 divide-white/[0.05] overflow-y-auto md:overflow-hidden">
                     {/* Left: Video Player */}
                     <div className={cn("flex-1 bg-[#050505] flex flex-col relative min-h-[260px] md:min-h-0",
-                        isPlaylist && playlistVideos.length > 0 ? "md:flex-[5]" : "md:flex-[7]"
+                        hasPlaylistSidebar ? "md:flex-[5]" : "md:flex-[7]"
                     )}>
                         <div className="flex-1 relative group bg-black">
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
@@ -396,7 +451,7 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
                             ) : (
                                 <ReactPlayer
                                     ref={playerRef}
-                                    url={cleanUrl}
+                                    url={playerUrl}
                                     width="100%" height="100%"
                                     controls playing={isOpen && !videoError}
                                     onPlay={handlePlay}
@@ -405,7 +460,16 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
                                     onEnded={handlePauseOrEnd}
                                     onReady={handleReady}
                                     onError={(e) => { console.error("Video Error:", e); setVideoError("Erro ao carregar o vídeo."); }}
-                                    config={{ youtube: { playerVars: { start: Math.floor(goal.youtubeTimestamp || 0), modestbranding: 1, rel: 0 } } }}
+                                    config={{
+                                        youtube: {
+                                            playerVars: {
+                                                start: Math.floor(goal.youtubeTimestamp || 0),
+                                                modestbranding: 1,
+                                                rel: 0,
+                                                ...(isPlaylist ? { listType: 'playlist', list: playlistId } : {}),
+                                            }
+                                        }
+                                    }}
                                 />
                             )}
                             {videoError && (
@@ -447,44 +511,65 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
                             <h3 className="text-sm font-bold text-white/90 line-clamp-1">{goal.title}</h3>
                             <div className="flex items-center gap-2 mt-1">
                                 <Badge variant="outline" className="text-[10px] bg-red-500/10 text-red-500 border-none px-1.5 py-0 h-4 uppercase tracking-widest font-black">Estudo Ativo</Badge>
-                                {isPlaylist && playlistVideos.length > 0 && (
-                                    <span className="text-[10px] text-muted-foreground font-bold">{completedCount}/{playlistVideos.length} concluídos</span>
+                                {isPlaylist && (
+                                    <span className="text-[10px] text-muted-foreground font-bold">
+                                        {playlistVideos.length > 0
+                                            ? `${completedCount}/${playlistVideos.length} concluídos`
+                                            : isPlaylistLoading
+                                                ? 'Carregando playlist...'
+                                                : 'Playlist detectada'}
+                                    </span>
                                 )}
                             </div>
                         </div>
                     </div>
 
                     {/* Playlist Sidebar */}
-                    {isPlaylist && playlistVideos.length > 0 && showPlaylist && (
+                    {hasPlaylistSidebar && (
                         <div className="md:flex-[2] flex flex-col bg-[#080808] overflow-hidden min-w-0 h-[220px] md:h-full md:min-h-0">
                             <div className="p-3 border-b border-white/[0.05] flex items-center justify-between shrink-0">
                                 <div className="flex items-center gap-2">
                                     <List className="w-3.5 h-3.5 text-red-500" />
                                     <span className="text-[9px] font-black uppercase tracking-widest text-white/40">Playlist</span>
                                 </div>
-                                <span className="text-[9px] font-black text-primary tabular-nums">{completedCount}/{playlistVideos.length}</span>
+                                <span className="text-[9px] font-black text-primary tabular-nums">
+                                    {playlistVideos.length > 0 ? `${completedCount}/${playlistVideos.length}` : '--'}
+                                </span>
                             </div>
                             <div className="flex-1 overflow-y-auto custom-scrollbar">
-                                <div className="p-2 space-y-0.5">
-                                    {playlistVideos.map((video, idx) => (
-                                        <div key={video.videoId}
-                                            className={cn(
-                                                "flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all text-[11px]",
-                                                idx === currentVideoIndex ? "bg-primary/10 border border-primary/20" : "hover:bg-white/[0.03]"
-                                            )}
-                                            onClick={() => playVideoAt(idx)}
-                                        >
-                                            <span className="text-[9px] font-black text-muted-foreground w-5 text-right shrink-0">{idx + 1}</span>
-                                            <span className="shrink-0">{video.status === 'completed' ? '✅' : video.status === 'in-progress' ? '🟨' : '⬜'}</span>
-                                            <span className={cn("flex-1 truncate text-[10px]", idx === currentVideoIndex && "text-primary font-bold")}>{video.title}</span>
-                                        </div>
-                                    ))}
-                                </div>
+                                {playlistVideos.length > 0 ? (
+                                    <div className="p-2 space-y-0.5">
+                                        {playlistVideos.map((video, idx) => (
+                                            <div key={video.videoId}
+                                                className={cn(
+                                                    "flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all text-[11px]",
+                                                    idx === currentVideoIndex ? "bg-primary/10 border border-primary/20" : "hover:bg-white/[0.03]"
+                                                )}
+                                                onClick={() => playVideoAt(idx)}
+                                            >
+                                                <span className="text-[9px] font-black text-muted-foreground w-5 text-right shrink-0">{idx + 1}</span>
+                                                <span className="shrink-0">{video.status === 'completed' ? '✅' : video.status === 'in-progress' ? '🟨' : '⬜'}</span>
+                                                <span className={cn("flex-1 truncate text-[10px]", idx === currentVideoIndex && "text-primary font-bold")}>{video.title}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="h-full flex flex-col items-center justify-center gap-2 p-4 text-center">
+                                        <p className="text-[10px] font-bold text-muted-foreground">
+                                            {isPlaylistLoading ? 'Carregando vídeos da playlist...' : playlistLoadError || 'Playlist detectada, iniciando carregamento...'}
+                                        </p>
+                                        {(playlistLoadError || !isPlaylistLoading) && (
+                                            <Button size="sm" variant="outline" className="h-7 text-[9px]" onClick={startPlaylistBootstrap}>
+                                                Tentar novamente
+                                            </Button>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             <div className="p-3 border-t border-white/[0.05] shrink-0">
                                 <div className="flex justify-between text-[9px] font-black text-muted-foreground mb-1">
                                     <span>Progresso</span>
-                                    <span>{completedCount}/{playlistVideos.length}</span>
+                                    <span>{playlistVideos.length > 0 ? `${completedCount}/${playlistVideos.length}` : '--'}</span>
                                 </div>
                                 <Progress value={playlistVideos.length > 0 ? (completedCount / playlistVideos.length) * 100 : 0} className="h-1 bg-white/[0.05]" />
                             </div>
@@ -493,7 +578,7 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
 
                     {/* Right: Study Docs */}
                     <div className={cn("flex-1 bg-[#0a0a0a] flex flex-col min-h-[300px] md:min-h-0 overflow-hidden relative z-10",
-                        isPlaylist && playlistVideos.length > 0 ? "md:flex-[3]" : "md:flex-[5]"
+                        hasPlaylistSidebar ? "md:flex-[3]" : "md:flex-[5]"
                     )}>
                         <div className="p-4 border-b border-white/[0.05] bg-white/[0.01] flex items-center justify-between shrink-0">
                             <div className="flex flex-col min-w-0">
