@@ -264,6 +264,19 @@ export const YoutubePlayerDialog: React.FC<YoutubePlayerDialogProps> = ({
         startPlaylistBootstrap();
     }, [isPlaylist, startPlaylistBootstrap]);
 
+    useEffect(() => {
+        return () => {
+            if (saveIntervalRef.current) {
+                clearInterval(saveIntervalRef.current);
+                saveIntervalRef.current = null;
+            }
+            if (playlistBootstrapTimerRef.current) {
+                clearTimeout(playlistBootstrapTimerRef.current);
+                playlistBootstrapTimerRef.current = null;
+            }
+        };
+    }, []);
+
     const playVideoAt = (idx: number) => {
         try {
             const internal = playerRef.current?.getInternalPlayer();
